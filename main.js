@@ -9,7 +9,8 @@ const state = {
   processedCount: 0,
   abortController: null,
   maxConcurrency: 4, 
-  apiKey: localStorage.getItem('gemini_api_key') || ''
+  apiKey: localStorage.getItem('gemini_api_key') || '',
+  errors: []
 };
 
 // DOM Elements
@@ -42,7 +43,7 @@ function init() {
   els.saveKeyBtn.addEventListener('click', () => {
     state.apiKey = els.apiKeyInput.value.trim();
     localStorage.setItem('gemini_api_key', state.apiKey);
-    alert('API Key가 브라우저에 저장되었습니다.');
+    alert('API Key가 저장되었습니다. (이미지 분석에 사용됨)');
     updateUI();
   });
 
@@ -109,29 +110,29 @@ function updateUI() {
   els.fileCount.textContent = state.files.length;
   const hasFiles = state.files.length > 0;
   const hasDir = !!state.outputDirHandle;
-  const hasKey = !!state.apiKey;
   const processing = state.isProcessing;
 
-  els.startBtn.disabled = !hasFiles || !hasDir || !hasKey || processing;
+  els.startBtn.disabled = !hasFiles || !hasDir || processing;
   els.stopBtn.disabled = !processing;
   
-  if (!hasKey) els.statusMsg.textContent = "API Key를 입력하고 저장해주세요.";
-  else if (!hasDir) els.statusMsg.textContent = "저장 폴더를 선택해주세요.";
+  if (!hasDir) els.statusMsg.textContent = "저장 폴더를 선택해주세요.";
   else if (!hasFiles) els.statusMsg.textContent = "원본 이미지를 추가해주세요.";
   else if (!processing) els.statusMsg.textContent = "준비됨";
 }
 
-// --- AI Processing Logic (Gemini + Imagen 3) ---
+// --- AI Processing Logic (Hybrid) ---
 
 async function startProcessing() {
   if (state.isProcessing) return;
   state.isProcessing = true;
   state.processedCount = 0;
+  state.errors = [];
   state.queue = [...state.files];
   state.abortController = new AbortController();
   
   els.gallery.innerHTML = '';
   updateUI();
+  els.statusMsg.textContent = "AI 엔진 연결 중...";
   
   processQueue();
 }
@@ -155,9 +156,11 @@ async function processQueue() {
     const file = state.queue.shift();
     state.activeWorkers++;
     
-    // Cycle through provided prompts
+    // Cycle prompts
     const activePrompts = state.prompts.filter(p => p.trim());
-    const prompt = activePrompts[state.processedCount % activePrompts.length] || "high quality aesthetic image";
+    const prompt = activePrompts.length > 0 
+      ? activePrompts[state.processedCount % activePrompts.length] 
+      : "high quality artistic illustration, detailed";
 
     processImageAI(file, prompt).then(() => {
       state.activeWorkers--;
@@ -165,8 +168,11 @@ async function processQueue() {
       updateProgress();
       processQueue();
     }).catch(err => {
-      console.error(err);
+      console.error("Task failed:", err);
+      state.errors.push(err.message);
       state.activeWorkers--;
+      state.processedCount++; // Still count as processed (failed)
+      updateProgress();
       processQueue();
     });
   }
@@ -175,14 +181,20 @@ async function processQueue() {
 function updateProgress() {
   const percent = (state.processedCount / state.files.length) * 100;
   els.progressBar.style.width = `${percent}%`;
-  els.statusMsg.textContent = `처리 중: ${state.processedCount} / ${state.files.length}`;
+  els.statusMsg.textContent = `처리 중: ${state.processedCount} / ${state.files.length} (성공: ${state.processedCount - state.errors.length})`;
 }
 
 function finishProcessing() {
   state.isProcessing = false;
-  els.statusMsg.textContent = "모든 작업 완료!";
+  
+  let msg = "모든 작업이 완료되었습니다.";
+  if (state.errors.length > 0) {
+    msg += `\n⚠️ ${state.errors.length}개의 오류가 발생했습니다.\n(첫번째 오류: ${state.errors[0]})`;
+  }
+  
+  els.statusMsg.textContent = state.errors.length > 0 ? "완료 (일부 오류)" : "완료!";
   updateUI();
-  alert("모든 이미지가 생성 및 저장되었습니다.");
+  alert(msg);
 }
 
 // --- API Calls ---
@@ -191,21 +203,33 @@ async function processImageAI(file, userPrompt) {
   if (state.abortController.signal.aborted) return;
 
   try {
-    // 1. Describe image using Gemini 1.5 Flash (for context)
-    const description = await describeImage(file);
+    // 1. Describe image using Gemini 1.5 Flash (If Key exists)
+    let description = "";
+    if (state.apiKey) {
+      try {
+        description = await describeImage(file);
+      } catch (geminiErr) {
+        console.warn("Gemini description failed, falling back to raw prompt:", geminiErr);
+        // Don't stop, just proceed with raw prompt
+      }
+    }
+
+    // 2. Construct Prompt
+    // Combining user prompt with image description for better img2img-like results
+    const fullPrompt = description 
+      ? `${userPrompt}. The image features: ${description}. High quality, 8k.` 
+      : `${userPrompt}. High quality, 8k resolution.`;
+
+    // 3. Generate with Pollinations (Robust, Free, Fast)
+    const imageBlob = await generatePollinations(fullPrompt);
     
-    // 2. Generate new image using Imagen 3 based on description + user prompt
-    const finalPrompt = `${userPrompt}. Reference context: ${description}`;
-    const imageBlob = await generateImagen3(finalPrompt);
-    
-    // 3. Resize to 1600x1600 & Save
+    // 4. Resize & Save
     const upscaledBlob = await upscaleTo1600(imageBlob);
     const fileName = `NB_PRO_${Date.now()}_${Math.floor(Math.random()*1000)}.png`;
     
     await saveFileToDisk(upscaledBlob, fileName);
     addToGallery(upscaledBlob, fileName);
   } catch (err) {
-    console.error("AI Generation failed:", err);
     throw err;
   }
 }
@@ -218,40 +242,28 @@ async function describeImage(file) {
     body: JSON.stringify({
       contents: [{
         parts: [
-          { text: "Describe this image briefly for use as a generative AI reference. Focus on subject, colors, and composition." },
+          { text: "Describe the main subject, composition, and colors of this image in one sentence for AI image generation reference." },
           { inline_data: { mime_type: file.type, data: base64.split(',')[1] } }
         ]
       }]
     })
   });
-  const data = await resp.json();
-  return data.candidates[0].content.parts[0].text;
-}
-
-async function generateImagen3(prompt) {
-  // Using the Imagen 3 prediction endpoint
-  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${state.apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      instances: [{ prompt: prompt }],
-      parameters: {
-        sampleCount: 1,
-        aspectRatio: "1:1"
-      }
-    })
-  });
-  
+  if (!resp.ok) throw new Error(`Gemini API Error: ${resp.status}`);
   const data = await resp.json();
   if (data.error) throw new Error(data.error.message);
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+async function generatePollinations(prompt) {
+  // Pollinations.ai generates images from text
+  const encoded = encodeURIComponent(prompt);
+  const seed = Math.floor(Math.random() * 100000);
+  // Requesting slightly larger to ensure quality, then scaling
+  const url = `https://image.pollinations.ai/prompt/${encoded}?width=1280&height=1280&nologo=true&seed=${seed}&model=flux`;
   
-  const b64 = data.predictions[0].bytesBase64Encoded;
-  const byteCharacters = atob(b64);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
-  }
-  return new Blob([new Uint8Array(byteNumbers)], { type: 'image/png' });
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Image Generation failed: ${resp.status}`);
+  return await resp.blob();
 }
 
 // --- Utilities ---
@@ -273,6 +285,9 @@ async function upscaleTo1600(blob) {
       canvas.width = 1600;
       canvas.height = 1600;
       const ctx = canvas.getContext('2d');
+      // High quality scaling
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, 1600, 1600);
       canvas.toBlob(resolve, 'image/png');
     };
@@ -282,10 +297,15 @@ async function upscaleTo1600(blob) {
 
 async function saveFileToDisk(blob, name) {
   if (!state.outputDirHandle) return;
-  const fileHandle = await state.outputDirHandle.getFileHandle(name, { create: true });
-  const writable = await fileHandle.createWritable();
-  await writable.write(blob);
-  await writable.close();
+  try {
+    const fileHandle = await state.outputDirHandle.getFileHandle(name, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  } catch (err) {
+    console.error("Save failed:", err);
+    throw new Error("File save failed: " + err.message);
+  }
 }
 
 function addToGallery(blob, name) {

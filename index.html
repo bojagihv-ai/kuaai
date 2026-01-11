@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nano Banana Pro - AI Batch Processor</title>
+  <title>Nano Banana Pro - Hybrid AI</title>
   <link href='./style.css' rel='stylesheet'>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,20 +12,20 @@
 <body>
   <div class="app-container">
     <header>
-      <h1>Nano Banana Pro <span>Batch Client</span></h1>
-      <p>Google Gemini & Imagen 3 기반 이미지 자동 생성 시스템</p>
+      <h1>Nano Banana Pro <span>Hybrid Edition</span></h1>
+      <p>Gemini Vision (분석) + Pollinations (생성) 하이브리드 시스템</p>
     </header>
 
     <main>
       <!-- API Key Setting -->
       <section class="api-settings">
         <div class="input-group">
-          <label for="api-key">🔑 Google AI Studio API Key (로컬 저장)</label>
+          <label for="api-key">🔑 Google Gemini API Key (선택사항 - 이미지 분석용)</label>
           <div class="api-input-wrapper">
-            <input type="password" id="api-key" placeholder="AI Studio에서 발급받은 API Key 입력...">
+            <input type="password" id="api-key" placeholder="키가 없어도 이미지 생성은 가능합니다 (키 입력시 정확도 향상)">
             <button id="save-key-btn" class="secondary-btn">저장</button>
           </div>
-          <small><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">여기에서 키 발급받기</a></small>
+          <small>키를 입력하면 Gemini가 원본 사진을 분석하여 더 정확한 결과물을 만듭니다.</small>
         </div>
       </section>
 
@@ -34,19 +34,19 @@
           <h2>프롬프트 설정 (최대 4개)</h2>
           <div class="input-group">
             <label for="prompt1">Prompt 1</label>
-            <input type="text" id="prompt1" placeholder="첫 번째 프롬프트 입력...">
+            <input type="text" id="prompt1" placeholder="예: Cyberpunk style illustration">
           </div>
           <div class="input-group">
             <label for="prompt2">Prompt 2</label>
-            <input type="text" id="prompt2" placeholder="두 번째 프롬프트 입력...">
+            <input type="text" id="prompt2" placeholder="예: Oil painting texture">
           </div>
           <div class="input-group">
             <label for="prompt3">Prompt 3</label>
-            <input type="text" id="prompt3" placeholder="세 번째 프롬프트 입력...">
+            <input type="text" id="prompt3" placeholder="예: 3D render, cute character">
           </div>
           <div class="input-group">
             <label for="prompt4">Prompt 4</label>
-            <input type="text" id="prompt4" placeholder="네 번째 프롬프트 입력...">
+            <input type="text" id="prompt4" placeholder="예: Sketch style, black and white">
           </div>
         </div>
 
