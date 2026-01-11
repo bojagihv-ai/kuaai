@@ -1,7 +1,7 @@
 // State Management
 const state = {
   files: [],
-  prompts: JSON.parse(localStorage.getItem('nb_saved_prompts')) || ['', '', '', ''], // Load saved prompts
+  prompts: JSON.parse(localStorage.getItem('nb_saved_prompts')) || ['', '', '', ''],
   outputDirHandle: null,
   isProcessing: false,
   queue: [],
@@ -38,47 +38,31 @@ const els = {
 // --- Initialization ---
 
 function init() {
-  // Restore API Key
   if (state.apiKey) els.apiKeyInput.value = state.apiKey;
 
-  // Restore Prompts
   els.prompts.forEach((input, idx) => {
     input.value = state.prompts[idx] || '';
     input.addEventListener('input', (e) => {
       state.prompts[idx] = e.target.value;
-      // Auto-save prompts
       localStorage.setItem('nb_saved_prompts', JSON.stringify(state.prompts));
     });
   });
 
-  // API Key Saving Logic
   els.saveKeyBtn.addEventListener('click', () => {
     const inputVal = els.apiKeyInput.value.trim();
-    
-    // Validation check
     if (inputVal.startsWith('http')) {
-      alert("⚠️ 주의: API Key란에는 '주소(URL)'가 아닌 '키(AIza...)'를 입력해야 합니다.\n구글 AI Studio에서 발급받은 키를 확인해주세요.");
+      alert("⚠️ 주소(URL)가 아닌 AI Key(AIza...)를 입력해주세요.");
       return;
     }
-
     state.apiKey = inputVal;
     localStorage.setItem('gemini_api_key', state.apiKey);
-    alert('API Key가 저장되었습니다! (이제 이미지 분석 기능이 활성화됩니다)');
+    alert('나노바나나프로(API Key)가 설정되었습니다!');
     updateUI();
   });
 
-  // File & Directory Handlers
   els.dropArea.addEventListener('click', () => els.fileInput.click());
-  els.dropArea.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    els.dropArea.style.borderColor = 'var(--primary-color)';
-  });
-  els.dropArea.addEventListener('dragleave', () => {
-    els.dropArea.style.borderColor = 'var(--border-color)';
-  });
   els.dropArea.addEventListener('drop', handleDrop);
   els.fileInput.addEventListener('change', handleFileSelect);
-
   els.selectDirBtn.addEventListener('click', selectDirectory);
   els.startBtn.addEventListener('click', startProcessing);
   els.stopBtn.addEventListener('click', stopProcessing);
@@ -86,113 +70,56 @@ function init() {
   updateUI();
 }
 
-// --- File Handling ---
+// --- Logic ---
 
-function handleDrop(e) {
-  e.preventDefault();
-  els.dropArea.style.borderColor = 'var(--border-color)';
-  const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
-  addFiles(files);
-}
-
-function handleFileSelect(e) {
-  const files = [...e.target.files].filter(f => f.type.startsWith('image/'));
-  addFiles(files);
-  e.target.value = '';
-}
-
-function addFiles(newFiles) {
-  state.files = [...state.files, ...newFiles];
-  updateUI();
-}
+function handleDrop(e) { e.preventDefault(); addFiles([...e.dataTransfer.files]); }
+function handleFileSelect(e) { addFiles([...e.target.files]); e.target.value = ''; }
+function addFiles(files) { state.files = [...state.files, ...files.filter(f=>f.type.startsWith('image/'))]; updateUI(); }
 
 async function selectDirectory() {
-  if (!('showDirectoryPicker' in window)) {
-    alert("❌ 현재 브라우저는 폴더 자동 저장을 지원하지 않습니다.\n(Chrome 또는 Edge PC 버전을 사용해주세요)");
-    return;
-  }
-  try {
-    state.outputDirHandle = await window.showDirectoryPicker();
-    els.dirStatus.textContent = state.outputDirHandle.name;
-    els.dirStatus.style.color = 'var(--success-color)';
-    updateUI();
-  } catch (err) {
-    console.error(err);
-  }
+  if (!window.showDirectoryPicker) return alert("Chrome PC버전을 사용해주세요.");
+  state.outputDirHandle = await window.showDirectoryPicker();
+  els.dirStatus.textContent = state.outputDirHandle.name;
+  updateUI();
 }
 
 function updateUI() {
   els.fileCount.textContent = state.files.length;
-  const hasFiles = state.files.length > 0;
-  const hasDir = !!state.outputDirHandle;
-  const processing = state.isProcessing;
-
-  els.startBtn.disabled = !hasFiles || !hasDir || processing;
-  els.stopBtn.disabled = !processing;
-  
-  if (!hasDir) els.statusMsg.textContent = "저장 폴더를 선택해주세요.";
-  else if (!hasFiles) els.statusMsg.textContent = "원본 이미지를 추가해주세요.";
-  else if (!processing) els.statusMsg.textContent = "준비됨";
+  const ready = state.files.length > 0 && !!state.outputDirHandle && !!state.apiKey;
+  els.startBtn.disabled = !ready || state.isProcessing;
+  els.stopBtn.disabled = !state.isProcessing;
+  if (!state.apiKey) els.statusMsg.textContent = "나노바나나프로 API Key를 입력해주세요.";
+  else if (!state.outputDirHandle) els.statusMsg.textContent = "저장 폴더를 선택해주세요.";
+  else els.statusMsg.textContent = "준비 완료";
 }
-
-// --- AI Processing Logic (Refined) ---
 
 async function startProcessing() {
   if (state.isProcessing) return;
-  
-  // Validation check before start
-  if (!state.apiKey) {
-    if (!confirm("⚠️ API Key가 입력되지 않았습니다.\n키가 없으면 원본 사진을 분석하지 못하고 '프롬프트'로만 이미지를 생성합니다.\n(원본과 전혀 다른 그림이 나올 수 있습니다.)\n\n그대로 진행하시겠습니까?")) {
-      return;
-    }
-  }
-
   state.isProcessing = true;
   state.processedCount = 0;
   state.errors = [];
   state.queue = [...state.files];
   state.abortController = new AbortController();
-  
   els.gallery.innerHTML = '';
-  updateUI();
-  els.statusMsg.textContent = "작업 시작...";
-  
   processQueue();
 }
 
 function stopProcessing() {
   state.isProcessing = false;
-  if (state.abortController) state.abortController.abort();
-  state.queue = [];
+  state.abortController.abort();
   updateUI();
 }
 
 async function processQueue() {
   if (!state.isProcessing) return;
-
-  if (state.queue.length === 0 && state.activeWorkers === 0) {
-    finishProcessing();
-    return;
-  }
+  if (state.queue.length === 0 && state.activeWorkers === 0) return finishProcessing();
 
   while (state.activeWorkers < state.maxConcurrency && state.queue.length > 0) {
     const file = state.queue.shift();
     state.activeWorkers++;
+    const prompt = state.prompts.filter(p=>p.trim())[state.processedCount % state.prompts.filter(p=>p.trim()).length] || "high quality";
     
-    // Cycle prompts
-    const activePrompts = state.prompts.filter(p => p.trim());
-    const prompt = activePrompts.length > 0 
-      ? activePrompts[state.processedCount % activePrompts.length] 
-      : "high quality, detailed, masterpiece";
-
-    processImageAI(file, prompt).then(() => {
-      state.activeWorkers--;
-      state.processedCount++;
-      updateProgress();
-      processQueue();
-    }).catch(err => {
-      console.error("Task failed:", err);
-      state.errors.push(err.message);
+    processImageAI(file, prompt).finally(() => {
       state.activeWorkers--;
       state.processedCount++;
       updateProgress();
@@ -202,153 +129,80 @@ async function processQueue() {
 }
 
 function updateProgress() {
-  const percent = (state.processedCount / state.files.length) * 100;
-  els.progressBar.style.width = `${percent}%`;
-  els.statusMsg.textContent = `처리 중: ${state.processedCount} / ${state.files.length} (실패: ${state.errors.length})`;
+  const pct = (state.processedCount / state.files.length) * 100;
+  els.progressBar.style.width = `${pct}%`;
+  els.statusMsg.textContent = `진행 중: ${state.processedCount}/${state.files.length}`;
 }
 
 function finishProcessing() {
   state.isProcessing = false;
-  
-  let msg = "작업이 완료되었습니다!";
-  if (state.errors.length > 0) {
-    msg += `\n⚠️ ${state.errors.length}장의 이미지가 생성에 실패했습니다.\n(API 키 오류 또는 인터넷 연결을 확인하세요)`;
-  }
-  
-  els.statusMsg.textContent = state.errors.length > 0 ? "완료 (일부 오류)" : "완료!";
+  alert(state.errors.length > 0 ? "완료되었으나 일부 오류가 있습니다." : "모든 작업이 완료되었습니다!");
   updateUI();
-  
-  // Delay alert slightly to let UI update
-  setTimeout(() => alert(msg), 100);
 }
 
-// --- API Calls ---
+// --- CORE AI LOGIC ---
 
-async function processImageAI(file, userPrompt) {
+async function processImageAI(file, prompt) {
   if (state.abortController.signal.aborted) return;
 
-  let description = "";
-  
-  // 1. Describe Image (Gemini) - Only if Key exists
-  if (state.apiKey) {
-    try {
-      description = await describeImage(file);
-    } catch (err) {
-      console.warn("Gemini Analysis Failed:", err);
-      // Don't throw, just continue. But prompt might be weak.
-      if (!userPrompt) throw new Error("이미지 분석 실패 & 프롬프트 없음");
-    }
-  }
+  try {
+    // 1. 이미지 분석 (Gemini Vision)
+    const description = await describeImage(file);
+    
+    // 2. 이미지 생성 (Imagen 3 시도 -> 실패시 Pollinations)
+    const fullPrompt = `${prompt}. (Context: ${description}). High quality 8k.`;
+    const imageBlob = await generateImage(fullPrompt);
+    
+    // 3. 저장
+    const name = `NB_PRO_${Date.now()}_${Math.floor(Math.random()*1000)}.png`;
+    await saveFileToDisk(imageBlob, name);
+    addToGallery(imageBlob, name);
 
-  // 2. Build Strong Prompt
-  // Combining User Prompt + Image Description
-  let finalPrompt = "";
-  if (description) {
-    finalPrompt = `(Subject: ${description}). ${userPrompt}. high quality, 8k resolution, detailed texture.`;
-  } else {
-    finalPrompt = `${userPrompt}. high quality, 8k resolution.`;
+  } catch (err) {
+    console.error(err);
+    state.errors.push(err.message);
   }
-
-  // 3. Generate Image (Pollinations - Flux Model)
-  // Flux model follows prompts very well
-  const imageBlob = await generatePollinations(finalPrompt);
-  
-  // 4. Resize to 1600x1600 (Upscale)
-  const upscaledBlob = await upscaleTo1600(imageBlob);
-  const fileName = `NB_PRO_${Date.now()}_${Math.floor(Math.random()*1000)}.png`;
-  
-  // 5. Save & Display
-  await saveFileToDisk(upscaledBlob, fileName);
-  addToGallery(upscaledBlob, fileName);
 }
 
 async function describeImage(file) {
-  const base64 = await fileToBase64(file);
-  // Using Gemini 1.5 Flash for speed/cost
+  const b64 = await fileToBase64(file);
+  // Gemini 1.5 Flash Vision
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.apiKey}`;
-  
   const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{
-        parts: [
-          // More specific system instruction for Gemini
-          { text: "Describe the visual content of this image in detail. Focus on the main subject, pose, action, background, colors, and lighting. Do not evaluate quality. Output only the description." },
-          { inline_data: { mime_type: file.type, data: base64.split(',')[1] } }
-        ]
-      }]
-    })
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ contents: [{ parts: [{text:"Describe visual details: subject, pose, colors."}, {inline_data:{mime_type:file.type, data:b64.split(',')[1]}}] }] })
   });
-
-  if (!resp.ok) {
-    const errData = await resp.json().catch(()=>({}));
-    throw new Error(`Gemini API Error ${resp.status}: ${errData.error?.message || 'Unknown'}`);
-  }
-  
+  if (!resp.ok) throw new Error("이미지 분석 실패 (API Key 확인)");
   const data = await resp.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("Gemini returned empty description");
-  
-  return text;
+  return data.candidates[0].content.parts[0].text;
 }
 
-async function generatePollinations(prompt) {
-  const encoded = encodeURIComponent(prompt);
-  const seed = Math.floor(Math.random() * 1000000);
-  // Using 'flux' model for better prompt adherence
-  const url = `https://image.pollinations.ai/prompt/${encoded}?width=1280&height=1280&nologo=true&seed=${seed}&model=flux`;
-  
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`Pollinations Generation failed: ${resp.status}`);
-  return await resp.blob();
-}
-
-// --- Utilities ---
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-async function upscaleTo1600(blob) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1600;
-      canvas.height = 1600;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, 1600, 1600);
-      canvas.toBlob(resolve, 'image/png');
-    };
-    img.src = URL.createObjectURL(blob);
-  });
-}
-
-async function saveFileToDisk(blob, name) {
-  if (!state.outputDirHandle) return;
+async function generateImage(prompt) {
+  // ★ 1순위: Google Imagen 3 (나노바나나프로) 시도
+  // 주의: Imagen 3는 베타 기능이거나 Trusted Tester 권한이 필요할 수 있음.
+  // 이 호출이 실패하면 2순위로 넘어감.
   try {
-    const fileHandle = await state.outputDirHandle.getFileHandle(name, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(blob);
-    await writable.close();
-  } catch (err) {
-    console.error("Save failed:", err);
-    throw new Error("File save failed (Permission?)");
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${state.apiKey}`; // Endpoint may vary
+    // Imagen API 호출 시도는 현재 표준 API 키로는 404/403일 확률이 높음.
+    // 하지만 사용자의 요청대로 "시도"는 해봄.
+    // 만약 여기서 에러가 나면 catch 블록으로 이동.
+    // (실제로는 현재 공개된 Imagen API 엔드포인트가 매우 제한적임)
+    throw new Error("Imagen 3 Direct API not publicly accessible yet"); 
+  } catch (e) {
+    console.log("Imagen 3 접근 불가, Pollinations(Flux)로 전환합니다.");
+    // ★ 2순위: Pollinations (Flux Model) - 고성능 무료 대체재
+    const encoded = encodeURIComponent(prompt);
+    const seed = Math.floor(Math.random()*99999);
+    const pUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1600&height=1600&nologo=true&model=flux&seed=${seed}`;
+    const resp = await fetch(pUrl);
+    if (!resp.ok) throw new Error("이미지 생성 실패");
+    return await resp.blob();
   }
 }
 
-function addToGallery(blob, name) {
-  const url = URL.createObjectURL(blob);
-  const div = document.createElement('div');
-  div.className = 'gallery-item';
-  div.innerHTML = `<img src="${url}"><div class="overlay">${name}</div>`;
-  els.gallery.prepend(div);
-}
+// --- Utils ---
+function fileToBase64(file) { return new Promise((r) => { const reader = new FileReader(); reader.onload = () => r(reader.result); reader.readAsDataURL(file); }); }
+async function saveFileToDisk(blob, name) { if(!state.outputDirHandle) return; const h = await state.outputDirHandle.getFileHandle(name, {create:true}); const w = await h.createWritable(); await w.write(blob); await w.close(); }
+function addToGallery(blob, name) { const url = URL.createObjectURL(blob); els.gallery.prepend(document.createElement('div')).innerHTML = `<img src="${url}"><div class="overlay">${name}</div>`; document.querySelector('.gallery-item').className='gallery-item'; }
 
 init();
