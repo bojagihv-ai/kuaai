@@ -4,7 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Nano Banana Pro - Batch Processor</title>
-  <link href='/style.css' rel='stylesheet'>
+  <!-- Fixed Path: ./style.css instead of /style.css -->
+  <link href='./style.css' rel='stylesheet'>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -42,8 +43,10 @@
           <h2>이미지 소스</h2>
           <div class="file-drop-area" id="drop-area">
             <p>여기에 사진을 드래그하거나 클릭하여 업로드하세요 (50장, 100장 가능)</p>
-            <input type="file" id="file-input" multiple accept="image/*">
           </div>
+          <!-- Moved input outside and hidden to prevent double-click issues -->
+          <input type="file" id="file-input" multiple accept="image/*" style="display: none;">
+          
           <div class="file-status">
             선택된 파일: <span id="file-count">0</span>장
           </div>
@@ -73,6 +76,7 @@
       </section>
     </main>
   </div>
-  <script type="module" src="/main.js"></script>
+  <!-- Fixed Path: ./main.js instead of /main.js -->
+  <script type="module" src="./main.js"></script>
 </body>
 </html>

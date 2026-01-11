@@ -75,6 +75,7 @@ function handleDrop(e) {
 function handleFileSelect(e) {
   const files = [...e.target.files].filter(f => f.type.startsWith('image/'));
   addFiles(files);
+  e.target.value = ''; // Reset to allow re-selection of same file
 }
 
 function addFiles(newFiles) {
@@ -105,6 +106,12 @@ function updateUI() {
 // --- Directory Handle ---
 
 async function selectDirectory() {
+  // Feature Check
+  if (!('showDirectoryPicker' in window)) {
+    alert("❌ 현재 브라우저는 '폴더 직접 저장' 기능을 지원하지 않습니다.\n\nPC 버전의 Chrome 또는 Edge 브라우저를 사용해주세요.\n(Firefox, Safari 및 모바일 브라우저는 보안 제한으로 인해 지원되지 않습니다.)");
+    return;
+  }
+
   try {
     state.outputDirHandle = await window.showDirectoryPicker();
     els.dirStatus.textContent = state.outputDirHandle.name;
@@ -112,6 +119,9 @@ async function selectDirectory() {
     updateUI();
   } catch (err) {
     console.error('Directory selection cancelled or failed', err);
+    if (err.name !== 'AbortError') {
+      alert("폴더 선택 중 오류가 발생했습니다: " + err.message);
+    }
   }
 }
 
