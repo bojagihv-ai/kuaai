@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nano Banana Pro - Batch Processor</title>
-  <!-- Fixed Path: ./style.css instead of /style.css -->
+  <title>Nano Banana Pro - AI Batch Processor</title>
   <link href='./style.css' rel='stylesheet'>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,10 +13,22 @@
   <div class="app-container">
     <header>
       <h1>Nano Banana Pro <span>Batch Client</span></h1>
-      <p>대량 이미지 AI 처리 및 자동 저장 시스템</p>
+      <p>Google Gemini & Imagen 3 기반 이미지 자동 생성 시스템</p>
     </header>
 
     <main>
+      <!-- API Key Setting -->
+      <section class="api-settings">
+        <div class="input-group">
+          <label for="api-key">🔑 Google AI Studio API Key (로컬 저장)</label>
+          <div class="api-input-wrapper">
+            <input type="password" id="api-key" placeholder="AI Studio에서 발급받은 API Key 입력...">
+            <button id="save-key-btn" class="secondary-btn">저장</button>
+          </div>
+          <small><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">여기에서 키 발급받기</a></small>
+        </div>
+      </section>
+
       <section class="config-section">
         <div class="prompts-container">
           <h2>프롬프트 설정 (최대 4개)</h2>
@@ -40,13 +51,11 @@
         </div>
 
         <div class="upload-container">
-          <h2>이미지 소스</h2>
+          <h2>원본 이미지 (레퍼런스)</h2>
           <div class="file-drop-area" id="drop-area">
-            <p>여기에 사진을 드래그하거나 클릭하여 업로드하세요 (50장, 100장 가능)</p>
+            <p>사진을 드래그하거나 클릭하여 업로드하세요</p>
           </div>
-          <!-- Moved input outside and hidden to prevent double-click issues -->
           <input type="file" id="file-input" multiple accept="image/*" style="display: none;">
-          
           <div class="file-status">
             선택된 파일: <span id="file-count">0</span>장
           </div>
@@ -59,7 +68,7 @@
           <span id="dir-status" class="status-text">선택되지 않음</span>
         </div>
         <div class="actions">
-          <button id="start-btn" class="primary-btn" disabled>🚀 처리 시작</button>
+          <button id="start-btn" class="primary-btn" disabled>🚀 AI 이미지 생성 시작</button>
           <button id="stop-btn" class="danger-btn" disabled>🛑 중지</button>
         </div>
         <div class="progress-bar-container">
@@ -69,14 +78,13 @@
       </section>
 
       <section class="gallery-section">
-        <h2>실시간 처리 결과</h2>
+        <h2>실시간 생성 결과</h2>
         <div id="gallery" class="gallery-grid">
           <!-- Images will appear here -->
         </div>
       </section>
     </main>
   </div>
-  <!-- Fixed Path: ./main.js instead of /main.js -->
   <script type="module" src="./main.js"></script>
 </body>
 </html>

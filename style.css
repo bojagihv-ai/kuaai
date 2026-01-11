@@ -49,6 +49,31 @@ header p {
   color: var(--text-secondary);
 }
 
+/* API Settings */
+.api-settings {
+  background-color: var(--surface-color);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  border: 1px solid var(--border-color);
+}
+
+.api-input-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.api-settings small {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.api-settings a {
+  color: var(--primary-color);
+}
+
 /* Config Section */
 .config-section {
   display: grid;
