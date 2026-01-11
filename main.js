@@ -1,7 +1,7 @@
 // State Management
 const state = {
   files: [],
-  prompts: ['', '', '', ''],
+  prompts: JSON.parse(localStorage.getItem('nb_saved_prompts')) || ['', '', '', ''], // Load saved prompts
   outputDirHandle: null,
   isProcessing: false,
   queue: [],
@@ -38,15 +38,36 @@ const els = {
 // --- Initialization ---
 
 function init() {
+  // Restore API Key
   if (state.apiKey) els.apiKeyInput.value = state.apiKey;
 
+  // Restore Prompts
+  els.prompts.forEach((input, idx) => {
+    input.value = state.prompts[idx] || '';
+    input.addEventListener('input', (e) => {
+      state.prompts[idx] = e.target.value;
+      // Auto-save prompts
+      localStorage.setItem('nb_saved_prompts', JSON.stringify(state.prompts));
+    });
+  });
+
+  // API Key Saving Logic
   els.saveKeyBtn.addEventListener('click', () => {
-    state.apiKey = els.apiKeyInput.value.trim();
+    const inputVal = els.apiKeyInput.value.trim();
+    
+    // Validation check
+    if (inputVal.startsWith('http')) {
+      alert("⚠️ 주의: API Key란에는 '주소(URL)'가 아닌 '키(AIza...)'를 입력해야 합니다.\n구글 AI Studio에서 발급받은 키를 확인해주세요.");
+      return;
+    }
+
+    state.apiKey = inputVal;
     localStorage.setItem('gemini_api_key', state.apiKey);
-    alert('API Key가 저장되었습니다. (이미지 분석에 사용됨)');
+    alert('API Key가 저장되었습니다! (이제 이미지 분석 기능이 활성화됩니다)');
     updateUI();
   });
 
+  // File & Directory Handlers
   els.dropArea.addEventListener('click', () => els.fileInput.click());
   els.dropArea.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -61,12 +82,6 @@ function init() {
   els.selectDirBtn.addEventListener('click', selectDirectory);
   els.startBtn.addEventListener('click', startProcessing);
   els.stopBtn.addEventListener('click', stopProcessing);
-
-  els.prompts.forEach((input, idx) => {
-    input.addEventListener('input', (e) => {
-      state.prompts[idx] = e.target.value;
-    });
-  });
 
   updateUI();
 }
@@ -93,7 +108,7 @@ function addFiles(newFiles) {
 
 async function selectDirectory() {
   if (!('showDirectoryPicker' in window)) {
-    alert("현재 브라우저는 폴더 자동 저장 기능을 지원하지 않습니다. Chrome/Edge PC 버전을 사용해주세요.");
+    alert("❌ 현재 브라우저는 폴더 자동 저장을 지원하지 않습니다.\n(Chrome 또는 Edge PC 버전을 사용해주세요)");
     return;
   }
   try {
@@ -120,10 +135,18 @@ function updateUI() {
   else if (!processing) els.statusMsg.textContent = "준비됨";
 }
 
-// --- AI Processing Logic (Hybrid) ---
+// --- AI Processing Logic (Refined) ---
 
 async function startProcessing() {
   if (state.isProcessing) return;
+  
+  // Validation check before start
+  if (!state.apiKey) {
+    if (!confirm("⚠️ API Key가 입력되지 않았습니다.\n키가 없으면 원본 사진을 분석하지 못하고 '프롬프트'로만 이미지를 생성합니다.\n(원본과 전혀 다른 그림이 나올 수 있습니다.)\n\n그대로 진행하시겠습니까?")) {
+      return;
+    }
+  }
+
   state.isProcessing = true;
   state.processedCount = 0;
   state.errors = [];
@@ -132,7 +155,7 @@ async function startProcessing() {
   
   els.gallery.innerHTML = '';
   updateUI();
-  els.statusMsg.textContent = "AI 엔진 연결 중...";
+  els.statusMsg.textContent = "작업 시작...";
   
   processQueue();
 }
@@ -160,7 +183,7 @@ async function processQueue() {
     const activePrompts = state.prompts.filter(p => p.trim());
     const prompt = activePrompts.length > 0 
       ? activePrompts[state.processedCount % activePrompts.length] 
-      : "high quality artistic illustration, detailed";
+      : "high quality, detailed, masterpiece";
 
     processImageAI(file, prompt).then(() => {
       state.activeWorkers--;
@@ -171,7 +194,7 @@ async function processQueue() {
       console.error("Task failed:", err);
       state.errors.push(err.message);
       state.activeWorkers--;
-      state.processedCount++; // Still count as processed (failed)
+      state.processedCount++;
       updateProgress();
       processQueue();
     });
@@ -181,20 +204,22 @@ async function processQueue() {
 function updateProgress() {
   const percent = (state.processedCount / state.files.length) * 100;
   els.progressBar.style.width = `${percent}%`;
-  els.statusMsg.textContent = `처리 중: ${state.processedCount} / ${state.files.length} (성공: ${state.processedCount - state.errors.length})`;
+  els.statusMsg.textContent = `처리 중: ${state.processedCount} / ${state.files.length} (실패: ${state.errors.length})`;
 }
 
 function finishProcessing() {
   state.isProcessing = false;
   
-  let msg = "모든 작업이 완료되었습니다.";
+  let msg = "작업이 완료되었습니다!";
   if (state.errors.length > 0) {
-    msg += `\n⚠️ ${state.errors.length}개의 오류가 발생했습니다.\n(첫번째 오류: ${state.errors[0]})`;
+    msg += `\n⚠️ ${state.errors.length}장의 이미지가 생성에 실패했습니다.\n(API 키 오류 또는 인터넷 연결을 확인하세요)`;
   }
   
   els.statusMsg.textContent = state.errors.length > 0 ? "완료 (일부 오류)" : "완료!";
   updateUI();
-  alert(msg);
+  
+  // Delay alert slightly to let UI update
+  setTimeout(() => alert(msg), 100);
 }
 
 // --- API Calls ---
@@ -202,67 +227,80 @@ function finishProcessing() {
 async function processImageAI(file, userPrompt) {
   if (state.abortController.signal.aborted) return;
 
-  try {
-    // 1. Describe image using Gemini 1.5 Flash (If Key exists)
-    let description = "";
-    if (state.apiKey) {
-      try {
-        description = await describeImage(file);
-      } catch (geminiErr) {
-        console.warn("Gemini description failed, falling back to raw prompt:", geminiErr);
-        // Don't stop, just proceed with raw prompt
-      }
+  let description = "";
+  
+  // 1. Describe Image (Gemini) - Only if Key exists
+  if (state.apiKey) {
+    try {
+      description = await describeImage(file);
+    } catch (err) {
+      console.warn("Gemini Analysis Failed:", err);
+      // Don't throw, just continue. But prompt might be weak.
+      if (!userPrompt) throw new Error("이미지 분석 실패 & 프롬프트 없음");
     }
-
-    // 2. Construct Prompt
-    // Combining user prompt with image description for better img2img-like results
-    const fullPrompt = description 
-      ? `${userPrompt}. The image features: ${description}. High quality, 8k.` 
-      : `${userPrompt}. High quality, 8k resolution.`;
-
-    // 3. Generate with Pollinations (Robust, Free, Fast)
-    const imageBlob = await generatePollinations(fullPrompt);
-    
-    // 4. Resize & Save
-    const upscaledBlob = await upscaleTo1600(imageBlob);
-    const fileName = `NB_PRO_${Date.now()}_${Math.floor(Math.random()*1000)}.png`;
-    
-    await saveFileToDisk(upscaledBlob, fileName);
-    addToGallery(upscaledBlob, fileName);
-  } catch (err) {
-    throw err;
   }
+
+  // 2. Build Strong Prompt
+  // Combining User Prompt + Image Description
+  let finalPrompt = "";
+  if (description) {
+    finalPrompt = `(Subject: ${description}). ${userPrompt}. high quality, 8k resolution, detailed texture.`;
+  } else {
+    finalPrompt = `${userPrompt}. high quality, 8k resolution.`;
+  }
+
+  // 3. Generate Image (Pollinations - Flux Model)
+  // Flux model follows prompts very well
+  const imageBlob = await generatePollinations(finalPrompt);
+  
+  // 4. Resize to 1600x1600 (Upscale)
+  const upscaledBlob = await upscaleTo1600(imageBlob);
+  const fileName = `NB_PRO_${Date.now()}_${Math.floor(Math.random()*1000)}.png`;
+  
+  // 5. Save & Display
+  await saveFileToDisk(upscaledBlob, fileName);
+  addToGallery(upscaledBlob, fileName);
 }
 
 async function describeImage(file) {
   const base64 = await fileToBase64(file);
-  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.apiKey}`, {
+  // Using Gemini 1.5 Flash for speed/cost
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.apiKey}`;
+  
+  const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{
         parts: [
-          { text: "Describe the main subject, composition, and colors of this image in one sentence for AI image generation reference." },
+          // More specific system instruction for Gemini
+          { text: "Describe the visual content of this image in detail. Focus on the main subject, pose, action, background, colors, and lighting. Do not evaluate quality. Output only the description." },
           { inline_data: { mime_type: file.type, data: base64.split(',')[1] } }
         ]
       }]
     })
   });
-  if (!resp.ok) throw new Error(`Gemini API Error: ${resp.status}`);
+
+  if (!resp.ok) {
+    const errData = await resp.json().catch(()=>({}));
+    throw new Error(`Gemini API Error ${resp.status}: ${errData.error?.message || 'Unknown'}`);
+  }
+  
   const data = await resp.json();
-  if (data.error) throw new Error(data.error.message);
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Gemini returned empty description");
+  
+  return text;
 }
 
 async function generatePollinations(prompt) {
-  // Pollinations.ai generates images from text
   const encoded = encodeURIComponent(prompt);
-  const seed = Math.floor(Math.random() * 100000);
-  // Requesting slightly larger to ensure quality, then scaling
+  const seed = Math.floor(Math.random() * 1000000);
+  // Using 'flux' model for better prompt adherence
   const url = `https://image.pollinations.ai/prompt/${encoded}?width=1280&height=1280&nologo=true&seed=${seed}&model=flux`;
   
   const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`Image Generation failed: ${resp.status}`);
+  if (!resp.ok) throw new Error(`Pollinations Generation failed: ${resp.status}`);
   return await resp.blob();
 }
 
@@ -285,9 +323,6 @@ async function upscaleTo1600(blob) {
       canvas.width = 1600;
       canvas.height = 1600;
       const ctx = canvas.getContext('2d');
-      // High quality scaling
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, 1600, 1600);
       canvas.toBlob(resolve, 'image/png');
     };
@@ -304,7 +339,7 @@ async function saveFileToDisk(blob, name) {
     await writable.close();
   } catch (err) {
     console.error("Save failed:", err);
-    throw new Error("File save failed: " + err.message);
+    throw new Error("File save failed (Permission?)");
   }
 }
 
