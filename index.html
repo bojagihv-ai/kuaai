@@ -1,14 +1,78 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hello World</title>
+  <title>Nano Banana Pro - Batch Processor</title>
   <link href='/style.css' rel='stylesheet'>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 </head>
 <body>
-  <h1>Hello, world!</h1>
-  <button onclick="console.log('hello');">Press me</button>
-  <script defer type="text/javascript" src="/main.js"></script>
+  <div class="app-container">
+    <header>
+      <h1>Nano Banana Pro <span>Batch Client</span></h1>
+      <p>대량 이미지 AI 처리 및 자동 저장 시스템</p>
+    </header>
+
+    <main>
+      <section class="config-section">
+        <div class="prompts-container">
+          <h2>프롬프트 설정 (최대 4개)</h2>
+          <div class="input-group">
+            <label for="prompt1">Prompt 1</label>
+            <input type="text" id="prompt1" placeholder="첫 번째 프롬프트 입력...">
+          </div>
+          <div class="input-group">
+            <label for="prompt2">Prompt 2</label>
+            <input type="text" id="prompt2" placeholder="두 번째 프롬프트 입력...">
+          </div>
+          <div class="input-group">
+            <label for="prompt3">Prompt 3</label>
+            <input type="text" id="prompt3" placeholder="세 번째 프롬프트 입력...">
+          </div>
+          <div class="input-group">
+            <label for="prompt4">Prompt 4</label>
+            <input type="text" id="prompt4" placeholder="네 번째 프롬프트 입력...">
+          </div>
+        </div>
+
+        <div class="upload-container">
+          <h2>이미지 소스</h2>
+          <div class="file-drop-area" id="drop-area">
+            <p>여기에 사진을 드래그하거나 클릭하여 업로드하세요 (50장, 100장 가능)</p>
+            <input type="file" id="file-input" multiple accept="image/*">
+          </div>
+          <div class="file-status">
+            선택된 파일: <span id="file-count">0</span>장
+          </div>
+        </div>
+      </section>
+
+      <section class="control-section">
+        <div class="folder-select">
+          <button id="select-dir-btn" class="secondary-btn">📂 저장 폴더 선택 (필수)</button>
+          <span id="dir-status" class="status-text">선택되지 않음</span>
+        </div>
+        <div class="actions">
+          <button id="start-btn" class="primary-btn" disabled>🚀 처리 시작</button>
+          <button id="stop-btn" class="danger-btn" disabled>🛑 중지</button>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <p id="status-message">준비됨</p>
+      </section>
+
+      <section class="gallery-section">
+        <h2>실시간 처리 결과</h2>
+        <div id="gallery" class="gallery-grid">
+          <!-- Images will appear here -->
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/main.js"></script>
 </body>
 </html>
