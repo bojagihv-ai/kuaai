@@ -549,30 +549,97 @@ async function parseInvoiceFile(file) {
     const data = await readFileAsArrayBuffer(file);
     const workbook = XLSX.read(data, { type: 'array' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet);
 
-    if (rows.length === 0) {
-      showToast('파일에 데이터가 없습니다.', 'warning');
+    // 로젠 출력 파일은 상단에 제목 행이 있어 헤더가 3행째에 있음
+    // 먼저 전체 데이터를 배열로 읽어서 헤더 행을 자동 감지
+    const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+    // 헤더 행 찾기: '운송장번호' 또는 '송장번호' 가 포함된 행
+    let headerRowIdx = -1;
+    let headers = [];
+    for (let i = 0; i < Math.min(allRows.length, 10); i++) {
+      const row = allRows[i];
+      if (!row) continue;
+      const rowStrs = row.map(c => String(c || '').trim());
+      if (rowStrs.some(c => c === '운송장번호' || c === '송장번호' || c === 'tracking_no')) {
+        headerRowIdx = i;
+        headers = rowStrs;
+        break;
+      }
+    }
+
+    // 헤더를 못 찾으면 기본 방식으로 파싱
+    if (headerRowIdx === -1) {
+      const rows = XLSX.utils.sheet_to_json(sheet);
+      if (rows.length === 0) {
+        showToast('파일에 데이터가 없습니다.', 'warning');
+        return;
+      }
+      const mapped = rows.map(row => {
+        const orderId = row['주문번호'] || row['order_id'] || row['주문 번호'] || '';
+        const trackingNo = row['송장번호'] || row['운송장번호'] || row['tracking_no'] || row['운송장 번호'] || '';
+        const receiverName = row['받는분성명'] || row['수령인'] || row['receiver_name'] || row['이름'] || '';
+        const productName = row['품목명'] || row['상품명'] || row['product_name'] || row['물품명'] || '';
+        return { orderId: String(orderId).trim(), trackingNo: String(trackingNo).trim(), receiverName: String(receiverName).trim(), productName: String(productName).trim(), status: trackingNo ? 'assigned' : 'pending' };
+      }).filter(r => r.orderId || r.trackingNo);
+      appState.uploadItems = mapped;
+      renderUploadTable();
+      showToast(`${mapped.length}건의 데이터를 읽었습니다.`, 'success');
       return;
     }
 
-    // 다양한 컬럼명에 대응
-    const mapped = rows.map(row => {
-      const orderId = row['주문번호'] || row['order_id'] || row['주문 번호'] || '';
-      const trackingNo = row['송장번호'] || row['운송장번호'] || row['tracking_no'] || row['운송장 번호'] || '';
-      const receiverName = row['받는분성명'] || row['수령인'] || row['receiver_name'] || '';
-      const productName = row['품목명'] || row['상품명'] || row['product_name'] || '';
+    // 헤더 행을 기반으로 데이터 행 파싱
+    const dataRows = allRows.slice(headerRowIdx + 1);
+    const findCol = (...names) => {
+      for (const name of names) {
+        const idx = headers.indexOf(name);
+        if (idx !== -1) return idx;
+      }
+      return -1;
+    };
 
-      return { orderId: String(orderId).trim(), trackingNo: String(trackingNo).trim(), receiverName, productName, status: trackingNo ? 'assigned' : 'pending' };
-    }).filter(r => r.orderId || r.trackingNo);
+    const colTrackingNo = findCol('운송장번호', '송장번호', 'tracking_no');
+    const colName = findCol('이름', '받는분성명', '수령인', '수하인');
+    const colProduct = findCol('물품명', '품목명', '상품명');
+    const colOrderId = findCol('주문번호', 'order_id');
+    const colPhone = findCol('휴대폰', '전화', '연락처');
+    const colAddr = findCol('주소');
 
-    // 기존 invoiceItems과 매칭 시도
+    const mapped = dataRows.map(row => {
+      if (!row || row.length === 0) return null;
+      const trackingNo = colTrackingNo >= 0 ? String(row[colTrackingNo] || '').trim() : '';
+      const receiverName = colName >= 0 ? String(row[colName] || '').trim() : '';
+      const productName = colProduct >= 0 ? String(row[colProduct] || '').trim() : '';
+      const orderId = colOrderId >= 0 ? String(row[colOrderId] || '').trim() : '';
+      const phone = colPhone >= 0 ? String(row[colPhone] || '').trim() : '';
+      const addr = colAddr >= 0 ? String(row[colAddr] || '').trim() : '';
+
+      if (!trackingNo || trackingNo === '합계') return null;
+
+      return { orderId, trackingNo, receiverName, productName, phone, addr, status: 'assigned' };
+    }).filter(Boolean);
+
+    // 주문번호가 없는 경우, 수령인 이름+물품명으로 기존 주문과 매칭
     if (appState.invoiceItems.length > 0) {
       mapped.forEach(m => {
-        const match = appState.invoiceItems.find(item => item.orderId === m.orderId);
-        if (match && m.trackingNo) {
-          m.receiverName = m.receiverName || match.receiverName;
-          m.productName = m.productName || match.productName;
+        if (m.orderId) {
+          const match = appState.invoiceItems.find(item => item.orderId === m.orderId);
+          if (match) {
+            m.receiverName = m.receiverName || match.receiverName;
+            m.productName = m.productName || match.productName;
+            m.orderItemCode = match.orderItemCode;
+          }
+        } else {
+          // 주문번호 없으면 수령인 이름으로 매칭 시도
+          const match = appState.invoiceItems.find(item =>
+            item.receiverName === m.receiverName ||
+            (m.phone && item.receiverTel && item.receiverTel.replace(/-/g, '').includes(m.phone.replace(/-/g, '')))
+          );
+          if (match) {
+            m.orderId = match.orderId;
+            m.productName = m.productName || match.productName;
+            m.orderItemCode = match.orderItemCode;
+          }
         }
       });
     }
