@@ -7,7 +7,10 @@ const appState = {
   cafe24: {
     mallId: localStorage.getItem('lc_cafe24_mall_id') || '',
     clientId: localStorage.getItem('lc_cafe24_client_id') || '',
+    clientSecret: localStorage.getItem('lc_cafe24_client_secret') || '',
     token: localStorage.getItem('lc_cafe24_token') || '',
+    refreshToken: localStorage.getItem('lc_cafe24_refresh_token') || '',
+    tokenExpiresAt: localStorage.getItem('lc_cafe24_token_expires_at') || '',
   },
   logen: {
     customerCode: localStorage.getItem('lc_logen_customer_code') || '',
@@ -30,7 +33,9 @@ function initDom() {
   // Settings
   dom.cafe24MallId = document.getElementById('cafe24-mall-id');
   dom.cafe24ClientId = document.getElementById('cafe24-client-id');
+  dom.cafe24ClientSecret = document.getElementById('cafe24-client-secret');
   dom.cafe24Token = document.getElementById('cafe24-token');
+  dom.cafe24RefreshToken = document.getElementById('cafe24-refresh-token');
   dom.saveCafe24Btn = document.getElementById('save-cafe24-btn');
   dom.cafe24Status = document.getElementById('cafe24-status');
 
@@ -109,7 +114,9 @@ function initTabs() {
 function loadSettings() {
   dom.cafe24MallId.value = appState.cafe24.mallId;
   dom.cafe24ClientId.value = appState.cafe24.clientId;
+  dom.cafe24ClientSecret.value = appState.cafe24.clientSecret;
   dom.cafe24Token.value = appState.cafe24.token;
+  dom.cafe24RefreshToken.value = appState.cafe24.refreshToken;
   dom.logenCustomerCode.value = appState.logen.customerCode;
   dom.logenSenderName.value = appState.logen.senderName;
   dom.logenSenderTel.value = appState.logen.senderTel;
@@ -163,10 +170,14 @@ function initEventListeners() {
 function saveCafe24Settings() {
   appState.cafe24.mallId = dom.cafe24MallId.value.trim();
   appState.cafe24.clientId = dom.cafe24ClientId.value.trim();
+  appState.cafe24.clientSecret = dom.cafe24ClientSecret.value.trim();
   appState.cafe24.token = dom.cafe24Token.value.trim();
+  appState.cafe24.refreshToken = dom.cafe24RefreshToken.value.trim();
   localStorage.setItem('lc_cafe24_mall_id', appState.cafe24.mallId);
   localStorage.setItem('lc_cafe24_client_id', appState.cafe24.clientId);
+  localStorage.setItem('lc_cafe24_client_secret', appState.cafe24.clientSecret);
   localStorage.setItem('lc_cafe24_token', appState.cafe24.token);
+  localStorage.setItem('lc_cafe24_refresh_token', appState.cafe24.refreshToken);
   updateStatusIndicators();
   showToast('카페24 설정이 저장되었습니다.', 'success');
 }
@@ -202,6 +213,55 @@ function updateStatusIndicators() {
 }
 
 // ============================================================
+// CAFE24 토큰 자동 갱신
+// ============================================================
+
+async function ensureValidToken() {
+  // 토큰 만료 시간 확인 (만료 5분 전에 미리 갱신)
+  const expiresAt = appState.cafe24.tokenExpiresAt;
+  if (expiresAt) {
+    const expiresTime = new Date(expiresAt).getTime();
+    const now = Date.now();
+    if (now < expiresTime - 5 * 60 * 1000) {
+      return; // 아직 유효함
+    }
+  }
+
+  // Refresh Token으로 갱신 시도
+  if (!appState.cafe24.refreshToken || !appState.cafe24.clientId || !appState.cafe24.clientSecret) {
+    return; // 갱신 불가 (정보 부족)
+  }
+
+  try {
+    const mallId = appState.cafe24.mallId;
+    const credentials = btoa(`${appState.cafe24.clientId}:${appState.cafe24.clientSecret}`);
+    const resp = await fetch(`https://${mallId}.cafe24api.com/api/v2/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${credentials}`,
+      },
+      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(appState.cafe24.refreshToken)}`,
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      appState.cafe24.token = data.access_token;
+      appState.cafe24.refreshToken = data.refresh_token;
+      appState.cafe24.tokenExpiresAt = data.expires_at;
+      localStorage.setItem('lc_cafe24_token', data.access_token);
+      localStorage.setItem('lc_cafe24_refresh_token', data.refresh_token);
+      localStorage.setItem('lc_cafe24_token_expires_at', data.expires_at);
+      dom.cafe24Token.value = data.access_token;
+      dom.cafe24RefreshToken.value = data.refresh_token;
+      console.log('토큰 자동 갱신 완료:', data.expires_at);
+    }
+  } catch (err) {
+    console.warn('토큰 자동 갱신 실패:', err);
+  }
+}
+
+// ============================================================
 // CAFE24 API - 주문 조회
 // ============================================================
 
@@ -218,6 +278,7 @@ async function fetchOrders() {
   showLoading('카페24에서 미발송 주문을 가져오는 중...');
 
   try {
+    await ensureValidToken();
     const orders = await cafe24GetUnshippedOrders(dateFrom, dateTo);
     appState.orders = orders;
     renderOrdersTable(orders);
@@ -257,7 +318,7 @@ async function cafe24GetUnshippedOrders(dateFrom, dateTo) {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
-      'X-Cafe24-Api-Version': '2024-06-01',
+      'X-Cafe24-Api-Version': '2025-12-01',
     }
   });
 
@@ -624,6 +685,7 @@ async function uploadToCafe24() {
 
   if (!confirm(`${selectedItems.length}건의 송장을 카페24에 등록하시겠습니까?`)) return;
 
+  await ensureValidToken();
   dom.uploadProgress.style.display = 'flex';
   dom.uploadToCafe24Btn.disabled = true;
 
@@ -687,7 +749,7 @@ async function cafe24UpdateShipping(orderId, orderItemCode, trackingNo) {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
-      'X-Cafe24-Api-Version': '2024-06-01',
+      'X-Cafe24-Api-Version': '2025-12-01',
     },
     body: JSON.stringify(body),
   });

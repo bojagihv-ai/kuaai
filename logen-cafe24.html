@@ -40,9 +40,18 @@
             <input type="text" id="cafe24-client-id" placeholder="Cafe24 앱 Client ID">
           </div>
           <div class="input-group">
+            <label for="cafe24-client-secret">Client Secret</label>
+            <input type="password" id="cafe24-client-secret" placeholder="Cafe24 앱 Client Secret">
+          </div>
+          <div class="input-group">
             <label for="cafe24-token">Access Token</label>
             <input type="password" id="cafe24-token" placeholder="OAuth2 Access Token">
             <small>카페24 개발자센터에서 발급받은 토큰을 입력하세요</small>
+          </div>
+          <div class="input-group">
+            <label for="cafe24-refresh-token">Refresh Token</label>
+            <input type="password" id="cafe24-refresh-token" placeholder="토큰 자동 갱신용">
+            <small>토큰 만료 시 자동 갱신됩니다 (2주간 유효)</small>
           </div>
           <button class="primary-btn" id="save-cafe24-btn">카페24 설정 저장</button>
         </div>
