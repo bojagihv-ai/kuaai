@@ -218,6 +218,7 @@ function updateStatusIndicators() {
 
 // API 프록시 URL (Vercel에서 호스팅)
 const API_PROXY = '/api/cafe24';
+const LOGEN_PROXY = '/api/logen';
 
 async function ensureValidToken() {
   // 토큰 만료 시간 확인 (만료 5분 전에 미리 갱신)
@@ -845,15 +846,11 @@ async function trackSingle() {
   showLoading('배송 정보 조회 중...');
   try {
     const info = await getTrackingInfo(trackingNo);
-    appState.trackingItems = [{ orderId: '-', trackingNo, receiverName: info.receiverName || '-', trackingStatus: info.status, lastUpdate: info.lastUpdate }];
+    appState.trackingItems = [{ orderId: '-', trackingNo, receiverName: '-', trackingStatus: info.status, lastUpdate: info.lastUpdate, location: info.location }];
     renderTrackingTable();
     showToast('배송 정보를 조회했습니다.', 'success');
   } catch (err) {
-    // 데모 모드
-    const demoInfo = generateDemoTracking(trackingNo);
-    appState.trackingItems = [demoInfo];
-    renderTrackingTable();
-    showToast('데모 모드: 샘플 배송 정보가 표시됩니다.', 'info');
+    showToast(`배송 조회 실패: ${err.message}`, 'error');
   } finally {
     hideLoading();
   }
@@ -874,65 +871,65 @@ async function trackAll() {
   }
 
   showLoading(`${allItems.length}건 배송 조회 중...`);
-  const results = [];
 
-  for (const item of allItems) {
-    try {
-      const info = await getTrackingInfo(item.trackingNo);
-      results.push({ ...item, trackingStatus: info.status, lastUpdate: info.lastUpdate, trackingDetails: info.details });
-    } catch {
-      const demo = generateDemoTracking(item.trackingNo);
-      results.push({ ...item, ...demo });
-    }
-    await delay(200);
+  try {
+    const trackingNumbers = allItems.map(item => item.trackingNo);
+    const trackingMap = await getTrackingInfoBatch(trackingNumbers);
+
+    const results = allItems.map(item => {
+      const info = trackingMap[item.trackingNo] || {};
+      return {
+        ...item,
+        trackingStatus: info.status || '조회중',
+        lastUpdate: info.lastUpdate || '-',
+        location: info.location || '',
+        trackingDetails: info.details || [],
+      };
+    });
+
+    appState.trackingItems = results;
+    renderTrackingTable();
+    showToast(`${results.length}건 조회 완료`, 'success');
+  } catch (err) {
+    showToast(`배송 조회 실패: ${err.message}`, 'error');
+  } finally {
+    hideLoading();
   }
+}
 
-  appState.trackingItems = results;
-  renderTrackingTable();
-  hideLoading();
-  showToast(`${results.length}건 조회 완료`, 'success');
+async function getTrackingInfoBatch(trackingNumbers) {
+  // 로젠택배 공식 Open API (서버 프록시 경유)
+  const resp = await fetch(LOGEN_PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      trackingNumbers,
+      customerId: appState.logen?.customerId || '33253401',
+    }),
+  });
+
+  const result = await resp.json();
+  if (result.error) throw new Error(result.error);
+
+  // API 응답을 송장번호별 맵으로 변환
+  const map = {};
+  if (result.data && Array.isArray(result.data)) {
+    for (const item of result.data) {
+      const no = item.slipNo || item.SLIP_NO || '';
+      map[no] = {
+        status: item.sttsNm || item.STTS_NM || '조회중',
+        lastUpdate: item.scanDt || item.SCAN_DT || '-',
+        location: item.brnNm || item.BRN_NM || '',
+        details: [],
+      };
+    }
+  }
+  return map;
 }
 
 async function getTrackingInfo(trackingNo) {
-  // 로젠택배 배송조회 API
-  // 공식 API가 제한적이므로, 스마트택배(Sweet Tracker) API 또는 직접 파싱 사용
-  // 여기서는 배송조회 API 호출 시도
-  const url = `https://www.ilogen.com/web/personal/trace/${encodeURIComponent(trackingNo)}`;
-  const resp = await fetch(url, { mode: 'cors' });
-  if (!resp.ok) throw new Error('조회 실패');
-
-  const html = await resp.text();
-  // HTML에서 배송 정보 파싱 (간소화된 버전)
-  return parseTrackingHtml(html);
-}
-
-function parseTrackingHtml(html) {
-  // 로젠 배송조회 페이지에서 정보 추출
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-
-  const rows = doc.querySelectorAll('.tkInfo table tbody tr');
-  const details = [];
-
-  rows.forEach(row => {
-    const cells = row.querySelectorAll('td');
-    if (cells.length >= 4) {
-      details.push({
-        date: cells[0]?.textContent?.trim() || '',
-        location: cells[1]?.textContent?.trim() || '',
-        status: cells[2]?.textContent?.trim() || '',
-        description: cells[3]?.textContent?.trim() || '',
-      });
-    }
-  });
-
-  const lastDetail = details[0] || {};
-  return {
-    status: lastDetail.status || '조회중',
-    lastUpdate: lastDetail.date || '-',
-    receiverName: '',
-    details,
-  };
+  const map = await getTrackingInfoBatch([trackingNo]);
+  return map[trackingNo] || { status: '조회중', lastUpdate: '-', details: [] };
 }
 
 function generateDemoTracking(trackingNo) {
@@ -976,7 +973,7 @@ function renderTrackingTable() {
     <tr>
       <td>${esc(item.orderId || '-')}</td>
       <td>${esc(item.trackingNo)}</td>
-      <td>${esc(item.receiverName || '-')}</td>
+      <td>${esc(item.receiverName || item.location || '-')}</td>
       <td><span class="status-tag ${statusClass}">${esc(item.trackingStatus || '조회중')}</span></td>
       <td>${esc(item.lastUpdate || '-')}</td>
       <td><button class="secondary-btn" onclick="showTrackingDetail(${i})">상세</button></td>
