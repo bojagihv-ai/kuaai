@@ -614,7 +614,8 @@ async function parseInvoiceFile(file) {
       const phone = colPhone >= 0 ? String(row[colPhone] || '').trim() : '';
       const addr = colAddr >= 0 ? String(row[colAddr] || '').trim() : '';
 
-      if (!trackingNo || trackingNo === '합계') return null;
+      // 숫자가 아닌 운송장번호는 헤더/소계 행이므로 제외
+      if (!trackingNo || trackingNo === '합계' || !/^\d+$/.test(trackingNo)) return null;
 
       return { orderId, trackingNo, receiverName, productName, phone, addr, status: 'assigned' };
     }).filter(Boolean);
