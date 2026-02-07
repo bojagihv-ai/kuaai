@@ -216,6 +216,9 @@ function updateStatusIndicators() {
 // CAFE24 토큰 자동 갱신
 // ============================================================
 
+// API 프록시 URL (Vercel에서 호스팅)
+const API_PROXY = '/api/cafe24';
+
 async function ensureValidToken() {
   // 토큰 만료 시간 확인 (만료 5분 전에 미리 갱신)
   const expiresAt = appState.cafe24.tokenExpiresAt;
@@ -233,28 +236,31 @@ async function ensureValidToken() {
   }
 
   try {
-    const mallId = appState.cafe24.mallId;
-    const credentials = btoa(`${appState.cafe24.clientId}:${appState.cafe24.clientSecret}`);
-    const resp = await fetch(`https://${mallId}.cafe24api.com/api/v2/oauth/token`, {
+    const resp = await fetch(API_PROXY, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${credentials}`,
-      },
-      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(appState.cafe24.refreshToken)}`,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'refresh_token',
+        mallId: appState.cafe24.mallId,
+        clientId: appState.cafe24.clientId,
+        clientSecret: appState.cafe24.clientSecret,
+        refreshToken: appState.cafe24.refreshToken,
+      }),
     });
 
     if (resp.ok) {
       const data = await resp.json();
-      appState.cafe24.token = data.access_token;
-      appState.cafe24.refreshToken = data.refresh_token;
-      appState.cafe24.tokenExpiresAt = data.expires_at;
-      localStorage.setItem('lc_cafe24_token', data.access_token);
-      localStorage.setItem('lc_cafe24_refresh_token', data.refresh_token);
-      localStorage.setItem('lc_cafe24_token_expires_at', data.expires_at);
-      dom.cafe24Token.value = data.access_token;
-      dom.cafe24RefreshToken.value = data.refresh_token;
-      console.log('토큰 자동 갱신 완료:', data.expires_at);
+      if (data.access_token) {
+        appState.cafe24.token = data.access_token;
+        appState.cafe24.refreshToken = data.refresh_token;
+        appState.cafe24.tokenExpiresAt = data.expires_at;
+        localStorage.setItem('lc_cafe24_token', data.access_token);
+        localStorage.setItem('lc_cafe24_refresh_token', data.refresh_token);
+        localStorage.setItem('lc_cafe24_token_expires_at', data.expires_at);
+        dom.cafe24Token.value = data.access_token;
+        dom.cafe24RefreshToken.value = data.refresh_token;
+        console.log('토큰 자동 갱신 완료:', data.expires_at);
+      }
     }
   } catch (err) {
     console.warn('토큰 자동 갱신 실패:', err);
@@ -301,25 +307,16 @@ async function fetchOrders() {
 }
 
 async function cafe24GetUnshippedOrders(dateFrom, dateTo) {
-  const mallId = appState.cafe24.mallId;
-  const token = appState.cafe24.token;
-
-  // Cafe24 API v2 - 미발송(standby) 상태 주문 조회
-  const baseUrl = `https://${mallId}.cafe24api.com/api/v2/admin/orders`;
-  const params = new URLSearchParams({
-    start_date: dateFrom,
-    end_date: dateTo,
-    order_status: 'N20',  // N20 = 배송준비중 (상품준비중)
-    limit: 100,
-    embed: 'items,receivers',
-  });
-
-  const resp = await fetch(`${baseUrl}?${params}`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'X-Cafe24-Api-Version': '2025-12-01',
-    }
+  const resp = await fetch(API_PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'get_orders',
+      mallId: appState.cafe24.mallId,
+      token: appState.cafe24.token,
+      startDate: dateFrom,
+      endDate: dateTo,
+    }),
   });
 
   if (!resp.ok) {
@@ -731,27 +728,17 @@ async function uploadToCafe24() {
 }
 
 async function cafe24UpdateShipping(orderId, orderItemCode, trackingNo) {
-  const mallId = appState.cafe24.mallId;
-  const token = appState.cafe24.token;
-  const url = `https://${mallId}.cafe24api.com/api/v2/admin/orders/${orderId}/fulfillments`;
-
-  const body = {
-    request: {
-      shipping_code: 'LOGEN',            // 로젠택배 코드
-      tracking_no: trackingNo,
-      status: 'shipping',                // 배송중으로 변경
-      order_item_code: orderItemCode ? [orderItemCode] : undefined,
-    }
-  };
-
-  const resp = await fetch(url, {
+  const resp = await fetch(API_PROXY, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'X-Cafe24-Api-Version': '2025-12-01',
-    },
-    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'update_shipping',
+      mallId: appState.cafe24.mallId,
+      token: appState.cafe24.token,
+      orderId,
+      orderItemCode,
+      trackingNo,
+    }),
   });
 
   if (!resp.ok) {
