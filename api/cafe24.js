@@ -100,8 +100,9 @@ export default async function handler(req, res) {
       const body = {
         shop_no: 1,
         request: {
-          shipping_company_code: '0014',
+          shipping_company_code: '0004',
           tracking_no: trackingNo,
+          status: 'standby',
           order_item_code: itemCodes.length > 0 ? itemCodes : undefined,
         },
       };
