@@ -880,10 +880,10 @@ async function trackAll() {
       const info = trackingMap[item.trackingNo] || {};
       return {
         ...item,
-        trackingStatus: info.status || '조회중',
+        trackingStatus: info.status || '배송준비',
         lastUpdate: info.lastUpdate || '-',
         location: info.location || '',
-        trackingDetails: info.details || [],
+        trackingDetails: info.events || [],
       };
     });
 
@@ -898,38 +898,23 @@ async function trackAll() {
 }
 
 async function getTrackingInfoBatch(trackingNumbers) {
-  // 로젠택배 공식 Open API (서버 프록시 경유)
+  // tracker.delivery API (서버 프록시 경유)
   const resp = await fetch(LOGEN_PROXY, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      trackingNumbers,
-      customerId: appState.logen?.customerId || '33253401',
-    }),
+    body: JSON.stringify({ trackingNumbers }),
   });
 
   const result = await resp.json();
   if (result.error) throw new Error(result.error);
 
-  // API 응답을 송장번호별 맵으로 변환
-  const map = {};
-  if (result.data && Array.isArray(result.data)) {
-    for (const item of result.data) {
-      const no = item.slipNo || item.SLIP_NO || '';
-      map[no] = {
-        status: item.sttsNm || item.STTS_NM || '조회중',
-        lastUpdate: item.scanDt || item.SCAN_DT || '-',
-        location: item.brnNm || item.BRN_NM || '',
-        details: [],
-      };
-    }
-  }
-  return map;
+  // 프록시 응답: { data: { "43757058041": { status, lastUpdate, location, events }, ... } }
+  return result.data || {};
 }
 
 async function getTrackingInfo(trackingNo) {
   const map = await getTrackingInfoBatch([trackingNo]);
-  return map[trackingNo] || { status: '조회중', lastUpdate: '-', details: [] };
+  return map[trackingNo] || { status: '배송준비', lastUpdate: '-', events: [] };
 }
 
 function generateDemoTracking(trackingNo) {
@@ -986,6 +971,7 @@ function getTrackingStatusClass(status) {
   if (status.includes('완료') || status.includes('배달완료')) return 'delivered';
   if (status.includes('배달출발') || status.includes('배송중')) return 'in-transit';
   if (status.includes('간선') || status.includes('집하')) return 'assigned';
+  if (status.includes('배송준비') || status.includes('조회중')) return 'pending';
   return 'pending';
 }
 
