@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>로젠 x 카페24 송장 매니저</title>
+  <link href="./logen-cafe24.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <header>
+      <h1>로젠 <span class="x">x</span> 카페24 <span>송장 매니저</span></h1>
+      <p>카페24 주문 조회 → 로젠 송장 발급 → 자동 등록 올인원 시스템</p>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="settings">설정</button>
+      <button class="tab-btn" data-tab="orders">주문 조회</button>
+      <button class="tab-btn" data-tab="invoice">송장 발급</button>
+      <button class="tab-btn" data-tab="upload">송장 등록</button>
+      <button class="tab-btn" data-tab="tracking">배송 조회</button>
+    </nav>
+
+    <!-- ===== TAB 1: 설정 ===== -->
+    <section class="tab-content active" id="tab-settings">
+      <div class="settings-grid">
+        <div class="settings-card">
+          <h2>카페24 API 설정</h2>
+          <div class="input-group">
+            <label for="cafe24-mall-id">쇼핑몰 ID (Mall ID)</label>
+            <input type="text" id="cafe24-mall-id" placeholder="예: myshop">
+          </div>
+          <div class="input-group">
+            <label for="cafe24-client-id">Client ID</label>
+            <input type="text" id="cafe24-client-id" placeholder="Cafe24 앱 Client ID">
+          </div>
+          <div class="input-group">
+            <label for="cafe24-client-secret">Client Secret</label>
+            <input type="password" id="cafe24-client-secret" placeholder="Cafe24 앱 Client Secret">
+          </div>
+          <div class="input-group">
+            <label for="cafe24-token">Access Token</label>
+            <input type="password" id="cafe24-token" placeholder="OAuth2 Access Token">
+            <small>카페24 개발자센터에서 발급받은 토큰을 입력하세요</small>
+          </div>
+          <div class="input-group">
+            <label for="cafe24-refresh-token">Refresh Token</label>
+            <input type="password" id="cafe24-refresh-token" placeholder="토큰 자동 갱신용">
+            <small>토큰 만료 시 자동 갱신됩니다 (2주간 유효)</small>
+          </div>
+          <button class="primary-btn" id="save-cafe24-btn">카페24 설정 저장</button>
+        </div>
+
+        <div class="settings-card">
+          <h2>로젠택배 설정</h2>
+          <div class="input-group">
+            <label for="logen-customer-code">고객 코드</label>
+            <input type="text" id="logen-customer-code" placeholder="로젠 계약 고객코드">
+          </div>
+          <div class="input-group">
+            <label for="logen-sender-name">보내는 사람</label>
+            <input type="text" id="logen-sender-name" placeholder="발송인 이름">
+          </div>
+          <div class="input-group">
+            <label for="logen-sender-tel">보내는 사람 연락처</label>
+            <input type="tel" id="logen-sender-tel" placeholder="010-0000-0000">
+          </div>
+          <div class="input-group">
+            <label for="logen-sender-addr">보내는 사람 주소</label>
+            <input type="text" id="logen-sender-addr" placeholder="발송지 주소">
+          </div>
+          <div class="input-group">
+            <label for="logen-sender-zipcode">보내는 사람 우편번호</label>
+            <input type="text" id="logen-sender-zipcode" placeholder="12345">
+          </div>
+          <button class="primary-btn" id="save-logen-btn">로젠 설정 저장</button>
+        </div>
+      </div>
+      <div class="settings-card status-card">
+        <h2>연동 상태</h2>
+        <div class="status-indicators">
+          <div class="indicator" id="cafe24-status">
+            <span class="dot"></span>
+            <span>카페24: <strong>미연결</strong></span>
+          </div>
+          <div class="indicator" id="logen-status">
+            <span class="dot"></span>
+            <span>로젠: <strong>미설정</strong></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TAB 2: 주문 조회 ===== -->
+    <section class="tab-content" id="tab-orders">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <h2>미발송 주문 목록</h2>
+          <span class="badge" id="order-count-badge">0건</span>
+        </div>
+        <div class="toolbar-right">
+          <div class="input-group inline">
+            <label for="order-date-from">기간</label>
+            <input type="date" id="order-date-from">
+            <span>~</span>
+            <input type="date" id="order-date-to">
+          </div>
+          <button class="primary-btn" id="fetch-orders-btn">주문 가져오기</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table id="orders-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="select-all-orders"></th>
+              <th>주문번호</th>
+              <th>주문일시</th>
+              <th>수령인</th>
+              <th>연락처</th>
+              <th>주소</th>
+              <th>우편번호</th>
+              <th>상품명</th>
+              <th>수량</th>
+              <th>배송메모</th>
+            </tr>
+          </thead>
+          <tbody id="orders-tbody">
+            <tr class="empty-row">
+              <td colspan="10">주문을 가져오려면 상단의 '주문 가져오기' 버튼을 클릭하세요</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-actions">
+        <span id="selected-count">0건 선택됨</span>
+        <button class="secondary-btn" id="export-selected-btn" disabled>선택 주문 → 송장 발급 탭으로</button>
+      </div>
+    </section>
+
+    <!-- ===== TAB 3: 송장 발급 ===== -->
+    <section class="tab-content" id="tab-invoice">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <h2>로젠 송장 발급</h2>
+          <span class="badge" id="invoice-count-badge">0건</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="secondary-btn" id="download-logen-excel">로젠 EDI 엑셀 다운로드</button>
+          <button class="primary-btn" id="generate-invoices-btn">송장번호 자동생성 (테스트)</button>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <strong>사용 방법:</strong>
+        <ol>
+          <li>'로젠 EDI 엑셀 다운로드' 클릭 → 로젠 WEB-EDI 시스템에 업로드</li>
+          <li>로젠에서 송장번호가 배정되면 결과 파일을 '송장 등록' 탭에서 업로드</li>
+          <li>또는 '송장번호 자동생성(테스트)' 버튼으로 테스트 가능</li>
+        </ol>
+      </div>
+
+      <div class="table-container">
+        <table id="invoice-table">
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>주문번호</th>
+              <th>수령인</th>
+              <th>연락처</th>
+              <th>주소</th>
+              <th>상품명</th>
+              <th>수량</th>
+              <th>송장번호</th>
+              <th>상태</th>
+            </tr>
+          </thead>
+          <tbody id="invoice-tbody">
+            <tr class="empty-row">
+              <td colspan="9">'주문 조회' 탭에서 주문을 선택해주세요</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== TAB 4: 송장 등록 ===== -->
+    <section class="tab-content" id="tab-upload">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <h2>카페24 송장번호 일괄 등록</h2>
+        </div>
+      </div>
+
+      <div class="upload-section">
+        <div class="upload-card">
+          <h3>방법 1: 로젠 결과 파일 업로드</h3>
+          <p>로젠 WEB-EDI에서 다운받은 송장 배정 결과 엑셀/CSV를 업로드하세요.</p>
+          <div class="file-upload-area" id="invoice-file-drop">
+            <p>파일을 드래그하거나 클릭하여 업로드</p>
+            <small>지원: .xlsx, .xls, .csv</small>
+          </div>
+          <input type="file" id="invoice-file-input" accept=".xlsx,.xls,.csv" style="display:none">
+        </div>
+
+        <div class="upload-card">
+          <h3>방법 2: 직접 입력</h3>
+          <p>송장번호를 직접 입력하여 매칭할 수 있습니다.</p>
+          <textarea id="manual-invoice-input" rows="8" placeholder="주문번호,송장번호 (한 줄에 하나씩)&#10;예:&#10;20240101-0001,12345678901&#10;20240101-0002,12345678902"></textarea>
+          <button class="secondary-btn" id="parse-manual-btn">직접 입력 적용</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table id="upload-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="select-all-upload"></th>
+              <th>주문번호</th>
+              <th>수령인</th>
+              <th>상품명</th>
+              <th>송장번호</th>
+              <th>등록상태</th>
+            </tr>
+          </thead>
+          <tbody id="upload-tbody">
+            <tr class="empty-row">
+              <td colspan="6">송장번호 데이터를 입력해주세요</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-actions">
+        <button class="primary-btn large" id="upload-to-cafe24-btn" disabled>카페24에 송장번호 일괄 등록</button>
+        <div class="upload-progress" id="upload-progress" style="display:none">
+          <div class="progress-bar-container">
+            <div class="progress-bar" id="upload-progress-bar"></div>
+          </div>
+          <span id="upload-progress-text">0/0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TAB 5: 배송 조회 ===== -->
+    <section class="tab-content" id="tab-tracking">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <h2>배송 조회</h2>
+        </div>
+        <div class="toolbar-right">
+          <div class="input-group inline">
+            <input type="text" id="tracking-input" placeholder="송장번호 입력">
+            <button class="primary-btn" id="track-single-btn">조회</button>
+          </div>
+          <button class="secondary-btn" id="track-all-btn">전체 배송현황 조회</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table id="tracking-table">
+          <thead>
+            <tr>
+              <th>주문번호</th>
+              <th>송장번호</th>
+              <th>수령인</th>
+              <th>배송상태</th>
+              <th>최근 업데이트</th>
+              <th>상세</th>
+            </tr>
+          </thead>
+          <tbody id="tracking-tbody">
+            <tr class="empty-row">
+              <td colspan="6">송장번호를 입력하거나 '전체 배송현황 조회' 버튼을 클릭하세요</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tracking Detail Modal -->
+      <div class="modal-overlay" id="tracking-modal" style="display:none">
+        <div class="modal">
+          <div class="modal-header">
+            <h3>배송 상세 정보</h3>
+            <button class="close-btn" id="close-modal">&times;</button>
+          </div>
+          <div class="modal-body" id="tracking-detail">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Toast Notification -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay" style="display:none">
+      <div class="spinner"></div>
+      <p id="loading-text">처리 중...</p>
+    </div>
+  </div>
+
+  <script src="./logen-cafe24.js"></script>
+</body>
+</html>
