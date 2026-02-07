@@ -54,19 +54,59 @@ export default async function handler(req, res) {
       return res.status(resp.status).json(data);
     }
 
+    // --- 주문 상세 조회 (order_item_code 조회용) ---
+    if (action === 'get_order_detail') {
+      const { orderId } = params;
+      const resp = await fetch(
+        `https://${mallId}.cafe24api.com/api/v2/admin/orders/${orderId}?embed=items`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-Cafe24-Api-Version': '2025-12-01',
+          },
+        }
+      );
+      const data = await resp.json();
+      return res.status(resp.status).json(data);
+    }
+
     // --- 송장 등록 (배송 처리) ---
     if (action === 'update_shipping') {
       const { orderId, orderItemCode, trackingNo } = params;
+
+      // order_item_code가 없으면 주문 상세에서 자동 조회
+      let itemCodes = orderItemCode ? [orderItemCode] : [];
+      if (itemCodes.length === 0) {
+        try {
+          const orderResp = await fetch(
+            `https://${mallId}.cafe24api.com/api/v2/admin/orders/${orderId}?embed=items`,
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'X-Cafe24-Api-Version': '2025-12-01',
+              },
+            }
+          );
+          const orderData = await orderResp.json();
+          const items = orderData.order?.items || [];
+          itemCodes = items.map(item => item.order_item_code).filter(Boolean);
+        } catch (e) {
+          // 조회 실패 시 빈 배열로 진행
+        }
+      }
+
       const body = {
+        shop_no: 1,
         request: {
-          shipping_code: 'LOGEN',
+          shipping_company_code: '0014',
           tracking_no: trackingNo,
-          status: 'shipping',
-          order_item_code: orderItemCode ? [orderItemCode] : undefined,
+          order_item_code: itemCodes.length > 0 ? itemCodes : undefined,
         },
       };
       const resp = await fetch(
-        `https://${mallId}.cafe24api.com/api/v2/admin/orders/${orderId}/fulfillments`,
+        `https://${mallId}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`,
         {
           method: 'POST',
           headers: {

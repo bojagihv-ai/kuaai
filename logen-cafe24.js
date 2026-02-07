@@ -809,12 +809,26 @@ async function cafe24UpdateShipping(orderId, orderItemCode, trackingNo) {
     }),
   });
 
-  if (!resp.ok) {
-    const errData = await resp.json().catch(() => ({}));
-    throw new Error(errData.error?.message || `HTTP ${resp.status}`);
+  const data = await resp.json().catch(() => ({}));
+
+  // API 응답 내 에러 확인 (200이라도 에러가 있을 수 있음)
+  if (data.error) {
+    const code = data.error.code;
+    const msg = data.error.message || '';
+    if (msg.includes('insufficient_scope')) {
+      throw new Error('권한 부족: 카페24 앱에 "주문 쓰기(mall.write_order)" 권한을 추가하고 다시 인증하세요.');
+    }
+    if (code === 404) {
+      throw new Error(`API를 찾을 수 없습니다 (404). 주문번호를 확인하세요: ${orderId}`);
+    }
+    throw new Error(msg || `API 에러 (코드: ${code})`);
   }
 
-  return resp.json();
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status}`);
+  }
+
+  return data;
 }
 
 // ============================================================
