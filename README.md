@@ -1,31 +1,79 @@
-# Nano Banana Pro - Batch Processor Client
+# Detail Page Studio (Local MVP)
 
-나노바나나프로(Nano Banana Pro) AI 서비스를 위한 대량 이미지 처리 및 자동 저장 웹 클라이언트입니다.
+A local-first full-stack MVP for generating product detail-page section images with a fixed 7-section framework:
+`hook / empathy / contrast / proof / detail / offer / faq`.
 
-## ✨ 주요 기능 (Key Features)
+## Stack
+- Backend: Python 3.11, FastAPI, SQLite (SQLModel), Pillow, Playwright + BeautifulSoup
+- Frontend: React + Vite + TypeScript
+- Image providers: Mock (default), NanoBanana adapter, ComfyUI adapter
 
-*   **대량 업로드 (Batch Upload)**: 50장, 100장 이상의 이미지를 한 번에 드래그 앤 드롭으로 대기열에 추가할 수 있습니다.
-*   **자동 대기열 관리 (Queue System)**: API 또는 리소스 제한을 고려하여 동시에 **4장**씩만 이미지를 처리합니다. 앞선 작업이 끝나면 자동으로 다음 작업이 시작됩니다.
-*   **고해상도 출력 (High-Res Output)**: 모든 결과물은 **1600x1600px** 정사각형 규격으로 렌더링됩니다.
-*   **자동 파일 저장 (Auto-Save)**: 브라우저의 File System Access API를 사용하여, 매번 다운로드 창을 띄우지 않고 지정된 폴더에 결과물을 **즉시 저장**합니다.
-*   **멀티 프롬프트 (Multi-Prompts)**: 최대 4개의 개별 프롬프트를 설정하여 작업에 반영할 수 있습니다.
+## Core Guarantees
+- `product_key` format: `{YYYYMMDD_HHMMSS}_{uploaded_file_size_bytes}`
+- Always generates all 7 fixed sections.
+- Competitor analysis is structure-only inspiration. No verbatim reuse.
+- Manual competitor mode supported (`uploaded_assets_ids`) when URL scraping fails.
+- JSON-contract parser with repair retry for strict schema handling.
 
-## 🛠 사용 방법 (How to Use)
+## Project Layout
+```
+repo/
+  backend/
+  frontend/
+  README.md
+  .env.example
+```
 
-1.  **실행 환경**: 이 프로그램은 **Google Chrome** 또는 **Microsoft Edge** (Chromium 기반 브라우저)에서 최적으로 작동합니다. (자동 저장 기능 호환성 이슈)
-2.  **폴더 권한 설정**: 앱 실행 후 상단의 **[📂 저장 폴더 선택]** 버튼을 눌러 결과물이 저장될 로컬 폴더를 지정하고 쓰기 권한을 허용해주세요.
-3.  **프롬프트 입력**: 필요에 따라 1~4번 프롬프트 입력창에 원하는 키워드를 입력합니다.
-4.  **이미지 추가**: 처리할 이미지 파일들을 박스 영역에 드래그하거나 클릭하여 업로드합니다.
-5.  **시작**: **[🚀 처리 시작]** 버튼을 누르면 작업이 시작됩니다.
-    *   화면 하단 갤러리에서 실시간 처리 현황을 볼 수 있습니다.
-    *   지정한 폴더에 `NB_PRO_...png` 형식으로 파일이 자동 생성됩니다.
+## Run (Windows PowerShell)
 
-## ⚠️ 기술적 참고사항 (Technical Notes)
+### 1) Backend
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install pydantic-settings
+playwright install chromium
+cd ..
+copy .env.example .env
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-*   **현재 상태**: 이 버전은 클라이언트 인터페이스 및 로직 데모 버전입니다. 실제 AI 생성 로직 부분(`generateMockImage` 함수)은 현재 캔버스 드로잉 시뮬레이션으로 대체되어 있습니다. 실제 서비스 연동 시 `main.js`의 `processImage` 부분을 해당 API 호출 코드로 교체해야 합니다.
-*   **보안 정책**: 로컬 파일 시스템 접근을 위해 HTTPS 환경 또는 `localhost`에서 실행해야 합니다.
+### 2) Frontend
+```powershell
+cd frontend
+npm install
+npm run dev
+```
 
-## 📋 파일 구조
-*   `index.html`: UI 레이아웃
-*   `style.css`: 다크 테마 스타일링
-*   `main.js`: 대기열 관리, Web Worker 패턴(비동기 처리), 파일 시스템 연동 로직
+Open: `http://127.0.0.1:5173`
+
+## API Endpoints
+- `POST /api/upload-image`
+- `POST /api/self-analyze`
+- `POST /api/similar-products`
+- `POST /api/competitor/analyze`
+- `POST /api/plan`
+- `POST /api/render`
+- `GET /api/jobs/{id}`
+- Static previews: `/outputs/...`
+
+## Tests
+```powershell
+cd backend
+pytest
+```
+
+## Notes
+- Render outputs write to: `outputs/{product_key}/{section}/000.png...`
+- Section renderer supports:
+  - `target_width` (default `860`)
+  - `max_height_per_image` (default `2000`)
+  - automatic slicing when section exceeds height limit
+
+## Next Steps
+1. Replace stub similarity with CLIP + FAISS index.
+2. Build drag-drop template designer and richer typography controls.
+3. Add brand preset packs (fonts/colors/layout).
+4. Add batch processing queue for multiple SKUs.
+5. Add caching/rate limiting and persistent job workers.

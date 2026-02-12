@@ -1,0 +1,11 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+sqlmodel==0.0.22
+python-multipart==0.0.19
+pillow==11.0.0
+beautifulsoup4==4.12.3
+playwright==1.49.1
+httpx==0.28.1
+pydantic==2.10.4
+pytest==8.3.4
+pydantic-settings==2.7.0
