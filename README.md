@@ -46,34 +46,4 @@ npm install
 npm run dev
 ```
 
-Open: `http://127.0.0.1:5173`
 
-## API Endpoints
-- `POST /api/upload-image`
-- `POST /api/self-analyze`
-- `POST /api/similar-products`
-- `POST /api/competitor/analyze`
-- `POST /api/plan`
-- `POST /api/render`
-- `GET /api/jobs/{id}`
-- Static previews: `/outputs/...`
-
-## Tests
-```powershell
-cd backend
-pytest
-```
-
-## Notes
-- Render outputs write to: `outputs/{product_key}/{section}/000.png...`
-- Section renderer supports:
-  - `target_width` (default `860`)
-  - `max_height_per_image` (default `2000`)
-  - automatic slicing when section exceeds height limit
-
-## Next Steps
-1. Replace stub similarity with CLIP + FAISS index.
-2. Build drag-drop template designer and richer typography controls.
-3. Add brand preset packs (fonts/colors/layout).
-4. Add batch processing queue for multiple SKUs.
-5. Add caching/rate limiting and persistent job workers.
