@@ -29,3 +29,23 @@
 *   `index.html`: UI 레이아웃
 *   `style.css`: 다크 테마 스타일링
 *   `main.js`: 대기열 관리, Web Worker 패턴(비동기 처리), 파일 시스템 연동 로직
+
+
+## 초보용 실행 UI (크롬에서 실행)
+
+코드를 VS Code에서 하나씩 실행하지 않고, 버튼형 UI로 사용하려면:
+
+1. 프로젝트 폴더에서 `RUN_UI.bat` 더블클릭
+2. 잠시 후 브라우저(크롬)에서 Streamlit 화면이 열림
+3. 사이드바에 키워드/마진/비용을 넣고 **지금 1회 실행** 버튼 클릭
+
+또는 터미널에서 직접 실행:
+
+```bash
+pip install -r requirements.txt
+streamlit run ui_app.py
+```
+
+결과 파일:
+- `data/latest_results.json`
+- `data/results.db`
