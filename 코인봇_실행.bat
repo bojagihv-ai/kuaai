@@ -1,76 +1,76 @@
 @echo off
-chcp 65001 >nul
+chcp 949 >nul
 cd /d %~dp0
-title 코인 자동매매 봇
+title ���� �ڵ��Ÿ� ��
 
 echo.
-echo  ╔══════════════════════════════════════════════════════════╗
-echo  ║       코인 자동매매 봇 v1.0  시작 중...                 ║
-echo  ║  업비트 + 바이비트  ^|  김프차익  ^|  AI 자동매매          ║
-echo  ╚══════════════════════════════════════════════════════════╝
+echo  +===========================================================+
+echo  |       ���� �ڵ��Ÿ� �� v1.0  ���� ��...                  |
+echo  |  ����Ʈ + ���̺�Ʈ  ^|  ��������  ^|  AI �ڵ��Ÿ�           |
+echo  +===========================================================+
 echo.
 
-:: ── 바탕화면 단축아이콘 자동 생성 ───────────────────────────────────────────
-set SHORTCUT="%USERPROFILE%\Desktop\코인봇.lnk"
+:: -- ����ȭ�� ��������� �ڵ� ���� --
+set SHORTCUT="%USERPROFILE%\Desktop\���κ�.lnk"
 if not exist %SHORTCUT% (
     echo Set oShell = CreateObject("WScript.Shell") > "%TEMP%\mklink.vbs"
     echo Set oLink = oShell.CreateShortcut(%SHORTCUT%) >> "%TEMP%\mklink.vbs"
     echo oLink.TargetPath = "%~f0" >> "%TEMP%\mklink.vbs"
     echo oLink.WorkingDirectory = "%~dp0" >> "%TEMP%\mklink.vbs"
-    echo oLink.Description = "코인 자동매매 봇" >> "%TEMP%\mklink.vbs"
+    echo oLink.Description = "���� �ڵ��Ÿ� ��" >> "%TEMP%\mklink.vbs"
     echo oLink.Save >> "%TEMP%\mklink.vbs"
     cscript //nologo "%TEMP%\mklink.vbs"
     del "%TEMP%\mklink.vbs"
-    echo  [+] 바탕화면에 단축아이콘 생성 완료!
+    echo  [+] ����ȭ�鿡 ��������� ���� �Ϸ�!
 )
 
-:: ── Python 확인 ──────────────────────────────────────────────────────────────
+:: -- Python Ȯ�� --
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo  [오류] Python이 설치되어 있지 않습니다.
-    echo  https://www.python.org 에서 Python 3.10 이상을 설치하세요.
+    echo  [����] Python�� ��ġ�Ǿ� ���� �ʽ��ϴ�.
+    echo  https://www.python.org ���� Python 3.10 �̻��� ��ġ�ϼ���.
     echo.
     pause
     exit /b 1
 )
 
 for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do set PYVER=%%v
-echo  [+] Python %PYVER% 감지됨
+echo  [+] Python %PYVER% ������
 
-:: ── .env 파일 확인 ───────────────────────────────────────────────────────────
+:: -- .env ���� Ȯ�� --
 if not exist ".env" (
     if exist ".env.example" (
         copy ".env.example" ".env" >nul
-        echo  [!] .env 파일이 없어서 자동으로 생성했습니다.
-        echo  [!] .env 파일을 열어 API 키를 입력한 후 다시 실행하세요.
+        echo  [!] .env ������ ��� �ڵ����� �����߽��ϴ�.
+        echo  [!] .env ������ ���� API Ű�� �Է��� �� �ٽ� �����ϼ���.
         echo.
-        echo  .env 파일을 지금 열겠습니까? (Y/N)
-        set /p OPEN_ENV=  ^> 
+        echo  .env ������ ���� ���ڽ��ϱ�? (Y/N)
+        set /p OPEN_ENV=  ^>
         if /i "%OPEN_ENV%"=="Y" notepad .env
         echo.
-        echo  API 키 입력 후 이 창을 닫고 다시 실행하세요.
+        echo  API Ű �Է� �� �� â�� �ݰ� �ٽ� �����ϼ���.
         pause
         exit /b 0
     )
 )
 
-:: ── 패키지 설치 ──────────────────────────────────────────────────────────────
-echo  [+] 필요한 패키지 설치 중... (처음 실행 시 시간이 걸릴 수 있습니다)
+:: -- ��Ű�� ��ġ --
+echo  [+] �ʿ��� ��Ű�� ��ġ ��... (ó�� ���� �� �ð��� �ɸ� �� �ֽ��ϴ�)
 python -m pip install -r crypto_bot_requirements.txt -q --disable-pip-version-check
 if %errorlevel% neq 0 (
-    echo  [오류] 패키지 설치 실패. 인터넷 연결을 확인하세요.
+    echo  [����] ��Ű�� ��ġ ����. ���ͳ� ������ Ȯ���ϼ���.
     pause
     exit /b 1
 )
-echo  [+] 패키지 준비 완료
+echo  [+] ��Ű�� �غ� �Ϸ�
 
-:: ── 서버 실행 ────────────────────────────────────────────────────────────────
+:: -- ���� ���� --
 echo.
-echo  [+] 서버 시작 중... 잠시 후 브라우저가 자동으로 열립니다.
-echo  [+] 종료하려면 이 창을 닫거나 Ctrl+C 를 누르세요.
+echo  [+] ���� ���� ��... ��� �� �������� �ڵ����� �����ϴ�.
+echo  [+] �����Ϸ��� �� â�� �ݰų� Ctrl+C �� ��������.
 echo.
 python run_bot.py
 
 echo.
-echo  봇이 종료되었습니다.
+echo  ���� ����Ǿ����ϴ�.
 pause
