@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>코인 자동매매 봇</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">📈 코인 자동매매 봇</div>
+  <div class="header-right">
+    <span id="ws-status" class="badge badge-off">WS 끊김</span>
+    <span id="bot-status" class="badge badge-off">봇 정지</span>
+    <span id="dry-run-badge" class="badge badge-warn">모의거래</span>
+    <button class="btn btn-sm" onclick="openModal('setup-modal')">⚙ 설정</button>
+  </div>
+</header>
+
+<!-- ── Main grid ── -->
+<main>
+
+  <!-- Ticker bar -->
+  <section class="ticker-bar">
+    <div class="ticker-card" id="upbit-ticker">
+      <div class="ticker-label">업비트 BTC/KRW</div>
+      <div class="ticker-price" id="upbit-price">—</div>
+      <div class="ticker-change" id="upbit-change">—</div>
+    </div>
+    <div class="ticker-card" id="bybit-ticker">
+      <div class="ticker-label">바이비트 BTC/USDT</div>
+      <div class="ticker-price" id="bybit-price">—</div>
+      <div class="ticker-change" id="bybit-change">—</div>
+    </div>
+    <div class="ticker-card kimchi-card">
+      <div class="ticker-label">김치 프리미엄</div>
+      <div class="ticker-price" id="kimchi-pct">—</div>
+      <div class="ticker-change" id="kimchi-net">수수료 후: —</div>
+    </div>
+    <div class="ticker-card">
+      <div class="ticker-label">USD/KRW</div>
+      <div class="ticker-price" id="usd-krw">—</div>
+      <div class="ticker-change">실시간 환율</div>
+    </div>
+    <div class="ticker-card">
+      <div class="ticker-label">펀딩비 (바이비트)</div>
+      <div class="ticker-price" id="funding-rate">—</div>
+      <div class="ticker-change" id="funding-next">—</div>
+    </div>
+  </section>
+
+  <!-- Chart + Indicators -->
+  <section class="chart-section">
+    <div class="chart-header">
+      <div class="chart-controls">
+        <select id="chart-exchange" onchange="refreshChart()">
+          <option value="upbit">업비트</option>
+          <option value="bybit">바이비트</option>
+        </select>
+        <select id="chart-symbol" onchange="refreshChart()">
+          <option value="KRW-BTC">BTC/KRW</option>
+          <option value="KRW-ETH">ETH/KRW</option>
+          <option value="KRW-SOL">SOL/KRW</option>
+        </select>
+        <select id="chart-interval" onchange="refreshChart()">
+          <option value="1m">1분</option>
+          <option value="5m">5분</option>
+          <option value="15m" selected>15분</option>
+          <option value="1h">1시간</option>
+          <option value="4h">4시간</option>
+          <option value="1d">일봉</option>
+        </select>
+        <button class="btn btn-sm" onclick="refreshChart()">🔄 새로고침</button>
+      </div>
+    </div>
+    <div class="chart-body">
+      <canvas id="price-chart"></canvas>
+    </div>
+    <div class="chart-body chart-body-small">
+      <canvas id="volume-chart"></canvas>
+    </div>
+  </section>
+
+  <!-- Indicators panel -->
+  <section class="indicators-panel">
+    <h3>기술적 분석 <span id="signal-badge" class="badge">—</span></h3>
+    <div class="indicator-score-bar">
+      <div class="score-track">
+        <div id="score-fill" class="score-fill"></div>
+        <span id="score-val" class="score-val">0</span>
+      </div>
+      <div class="score-labels"><span>매도 -100</span><span>중립 0</span><span>+100 매수</span></div>
+    </div>
+    <div class="indicator-grid">
+      <div class="ind-item"><span class="ind-label">RSI(14)</span><span id="ind-rsi" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">MACD</span><span id="ind-macd" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">MACD 히스토</span><span id="ind-macd-hist" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">볼린저 상단</span><span id="ind-bb-upper" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">볼린저 중단</span><span id="ind-bb-mid" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">볼린저 하단</span><span id="ind-bb-lower" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">EMA 5</span><span id="ind-ema5" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">EMA 20</span><span id="ind-ema20" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">EMA 60</span><span id="ind-ema60" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">스토캐스틱 K</span><span id="ind-stoch-k" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">스토캐스틱 D</span><span id="ind-stoch-d" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">거래량 배율</span><span id="ind-vol-ratio" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">ATR</span><span id="ind-atr" class="ind-val">—</span></div>
+      <div class="ind-item"><span class="ind-label">트렌드</span><span id="ind-trend" class="ind-val">—</span></div>
+    </div>
+    <div class="recommendation-box" id="recommendation-box">
+      <strong>추천:</strong> <span id="rec-action">—</span><br/>
+      <small id="rec-reasons">—</small>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="runAnalysis()">🔍 분석 실행</button>
+  </section>
+
+  <!-- Kimchi premium detail -->
+  <section class="kimchi-section">
+    <h3>김치 프리미엄 & 차익거래</h3>
+    <div class="kimchi-gauge-wrap">
+      <canvas id="kimchi-gauge" width="200" height="110"></canvas>
+    </div>
+    <div class="kimchi-detail">
+      <div class="kd-row"><span>업비트 (KRW)</span><strong id="kd-upbit">—</strong></div>
+      <div class="kd-row"><span>바이비트 (KRW 환산)</span><strong id="kd-bybit-krw">—</strong></div>
+      <div class="kd-row"><span>김프</span><strong id="kd-kimchi">—</strong></div>
+      <div class="kd-row"><span>수수료(왕복)</span><strong id="kd-fee">약 0.22%</strong></div>
+      <div class="kd-row"><span>순수익 예상</span><strong id="kd-net">—</strong></div>
+      <div class="kd-row"><span>차익 방향</span><strong id="kd-dir">—</strong></div>
+    </div>
+    <div class="arb-config">
+      <label>거래금액(KRW) <input type="number" id="arb-amount" value="1000000" min="100000" step="100000"/></label>
+      <label>최소수익률(%) <input type="number" id="arb-min-profit" value="0.3" min="0.1" step="0.1"/></label>
+      <div class="toggle-row">
+        <span>자동 차익거래</span>
+        <label class="switch">
+          <input type="checkbox" id="arb-auto" onchange="updateArbitrageConfig()"/>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+    <div id="arb-profit-info" class="profit-info hidden"></div>
+  </section>
+
+  <!-- Bot control + PnL -->
+  <section class="bot-control-section">
+    <h3>봇 제어</h3>
+    <div class="bot-mode-tabs">
+      <button class="tab-btn active" onclick="switchTab('auto')">자동 모드</button>
+      <button class="tab-btn" onclick="switchTab('user')">사용자 모드</button>
+    </div>
+
+    <!-- Auto mode config -->
+    <div id="auto-tab" class="tab-content">
+      <div class="form-grid">
+        <label>심볼 <select id="auto-symbol"><option>KRW-BTC</option><option>KRW-ETH</option><option>KRW-SOL</option></select></label>
+        <label>타임프레임 <select id="auto-interval"><option value="5m">5분</option><option value="15m" selected>15분</option><option value="1h">1시간</option></select></label>
+        <label>기본 투자비율(%) <input type="number" id="auto-base-ratio" value="10" min="1" max="100"/></label>
+        <label>최대 투자비율(%) <input type="number" id="auto-max-ratio" value="50" min="1" max="100"/></label>
+        <label>손절(%) <input type="number" id="auto-stoploss" value="3" min="0.1" step="0.1"/></label>
+        <label>익절(%) <input type="number" id="auto-takeprofit" value="5" min="0.1" step="0.1"/></label>
+        <label>트레일링(%) <input type="number" id="auto-trailing" value="2" min="0" step="0.1"/></label>
+        <label>매수점수 <input type="number" id="auto-buy-score" value="40" min="10" max="100"/></label>
+        <label>매도점수 <input type="number" id="auto-sell-score" value="40" min="10" max="100"/></label>
+        <label>쿨다운(초) <input type="number" id="auto-cooldown" value="300" min="30"/></label>
+      </div>
+      <button class="btn btn-secondary btn-full" onclick="saveAutoConfig()">전략 저장</button>
+    </div>
+
+    <!-- User mode config -->
+    <div id="user-tab" class="tab-content hidden">
+      <h4>매수 조건</h4>
+      <div class="form-grid">
+        <label>RSI 이하 <input type="number" id="u-buy-rsi" value="35" min="1" max="99"/></label>
+        <label>MACD 골든크로스 <input type="checkbox" id="u-buy-macd" checked/></label>
+        <label>볼린저 하단 <input type="checkbox" id="u-buy-bb" checked/></label>
+        <label>매수점수 <input type="number" id="u-buy-score" value="35"/></label>
+      </div>
+      <h4>매도 조건</h4>
+      <div class="form-grid">
+        <label>RSI 이상 <input type="number" id="u-sell-rsi" value="70" min="1" max="99"/></label>
+        <label>MACD 데드크로스 <input type="checkbox" id="u-sell-macd" checked/></label>
+        <label>매도점수 <input type="number" id="u-sell-score" value="35"/></label>
+      </div>
+      <h4>손익 관리</h4>
+      <div class="form-grid">
+        <label>손절(%) <input type="number" id="u-stoploss" value="3" step="0.1"/></label>
+        <label>익절(%) <input type="number" id="u-takeprofit" value="5" step="0.1"/></label>
+        <label>트레일링(%) <input type="number" id="u-trailing" value="2" step="0.1"/></label>
+        <label>기본투자(%) <input type="number" id="u-base-ratio" value="10"/></label>
+        <label>최대투자(%) <input type="number" id="u-max-ratio" value="60"/></label>
+      </div>
+      <h4>분할매수 DCA</h4>
+      <div id="dca-levels" class="dca-table">
+        <div class="dca-row">
+          <span>-3% 하락 시</span><span>시드 5%</span>
+        </div>
+        <div class="dca-row">
+          <span>-5% 하락 시</span><span>시드 10%</span>
+        </div>
+        <div class="dca-row">
+          <span>-8% 하락 시</span><span>시드 15%</span>
+        </div>
+        <div class="dca-row">
+          <span>-12% 하락 시</span><span>시드 20%</span>
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-full" onclick="saveUserConfig()">사용자 전략 저장</button>
+    </div>
+
+    <!-- Bot start/stop -->
+    <div class="bot-action-row">
+      <label>시드(KRW) <input type="number" id="seed-krw" value="1000000" min="10000" step="100000"/></label>
+      <div class="mode-toggle">
+        <span>모의거래</span>
+        <label class="switch">
+          <input type="checkbox" id="real-mode" onchange="toggleRealMode()"/>
+          <span class="slider"></span>
+        </label>
+        <span>실거래</span>
+      </div>
+    </div>
+    <div class="bot-buttons">
+      <button class="btn btn-success btn-lg" id="start-btn" onclick="startBot()">▶ 봇 시작</button>
+      <button class="btn btn-danger btn-lg" id="stop-btn" onclick="stopBot()" disabled>■ 봇 정지</button>
+    </div>
+
+    <!-- PnL summary -->
+    <div class="pnl-summary" id="pnl-summary">
+      <div class="pnl-item"><span>총 거래</span><strong id="pnl-total">0</strong></div>
+      <div class="pnl-item"><span>승</span><strong id="pnl-wins" class="green">0</strong></div>
+      <div class="pnl-item"><span>패</span><strong id="pnl-losses" class="red">0</strong></div>
+      <div class="pnl-item"><span>승률</span><strong id="pnl-winrate">0%</strong></div>
+      <div class="pnl-item"><span>순손익</span><strong id="pnl-net">0</strong></div>
+      <div class="pnl-item"><span>차익거래 수익</span><strong id="pnl-arb" class="green">0</strong></div>
+    </div>
+  </section>
+
+  <!-- Trade log -->
+  <section class="trade-log-section">
+    <h3>거래 내역 <button class="btn btn-sm" onclick="loadTrades()">🔄</button></h3>
+    <div class="trade-log" id="trade-log">
+      <div class="trade-log-empty">거래 내역이 없습니다.</div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── Setup Modal ── -->
+<div id="setup-modal" class="modal hidden">
+  <div class="modal-inner">
+    <h2>거래소 API 설정</h2>
+    <div class="form-group">
+      <label>업비트 Access Key</label>
+      <input type="password" id="upbit-key" placeholder="업비트 API Key"/>
+    </div>
+    <div class="form-group">
+      <label>업비트 Secret Key</label>
+      <input type="password" id="upbit-secret" placeholder="업비트 Secret Key"/>
+    </div>
+    <hr/>
+    <div class="form-group">
+      <label>바이비트 API Key</label>
+      <input type="password" id="bybit-key" placeholder="바이비트 API Key"/>
+    </div>
+    <div class="form-group">
+      <label>바이비트 Secret Key</label>
+      <input type="password" id="bybit-secret" placeholder="바이비트 Secret Key"/>
+    </div>
+    <div class="form-group toggle-row">
+      <span>모의거래 모드</span>
+      <label class="switch">
+        <input type="checkbox" id="modal-dry-run" checked/>
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn btn-primary" onclick="saveSetup()">저장 & 연결</button>
+      <button class="btn btn-ghost" onclick="closeModal('setup-modal')">취소</button>
+    </div>
+    <div id="setup-msg" class="msg hidden"></div>
+  </div>
+</div>
+
+<!-- ── Alert toast ── -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
