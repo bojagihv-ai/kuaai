@@ -10,6 +10,20 @@ echo  ║  업비트 + 바이비트  ^|  김프차익  ^|  AI 자동매매      
 echo  ╚══════════════════════════════════════════════════════════╝
 echo.
 
+:: ── 바탕화면 단축아이콘 자동 생성 ───────────────────────────────────────────
+set SHORTCUT="%USERPROFILE%\Desktop\코인봇.lnk"
+if not exist %SHORTCUT% (
+    echo Set oShell = CreateObject("WScript.Shell") > "%TEMP%\mklink.vbs"
+    echo Set oLink = oShell.CreateShortcut(%SHORTCUT%) >> "%TEMP%\mklink.vbs"
+    echo oLink.TargetPath = "%~f0" >> "%TEMP%\mklink.vbs"
+    echo oLink.WorkingDirectory = "%~dp0" >> "%TEMP%\mklink.vbs"
+    echo oLink.Description = "코인 자동매매 봇" >> "%TEMP%\mklink.vbs"
+    echo oLink.Save >> "%TEMP%\mklink.vbs"
+    cscript //nologo "%TEMP%\mklink.vbs"
+    del "%TEMP%\mklink.vbs"
+    echo  [+] 바탕화면에 단축아이콘 생성 완료!
+)
+
 :: ── Python 확인 ──────────────────────────────────────────────────────────────
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
